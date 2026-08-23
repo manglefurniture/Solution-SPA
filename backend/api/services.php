@@ -8,20 +8,20 @@ requireAuth();
 $pdo = db();
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
-if ($method === 'GET') {
-    $stmt = $pdo->query('SELECT id, name, description, duration_minutes, price, active FROM services ORDER BY active DESC, name');
-    respond(['data' => $stmt->fetchAll()]);
+function serviceId(mixed $value): int|false
+{
+    return filter_var($value, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
 }
 
-if ($method === 'POST') {
-    $data = jsonInput();
-    requireFields($data, ['name']);
+function normalizeService(array $data, array $fallback = []): array
+{
+    $name = trim((string)($data['name'] ?? $fallback['name'] ?? ''));
+    $description = trim((string)($data['description'] ?? $fallback['description'] ?? ''));
+    $duration = filter_var($data['duration_minutes'] ?? $fallback['duration_minutes'] ?? 60, FILTER_VALIDATE_INT, ['options' => ['min_range' => 5, 'max_range' => 1440]]);
+    $priceRaw = $data['price'] ?? $fallback['price'] ?? null;
+    $active = array_key_exists('active', $data) ? ((bool)$data['active'] ? 1 : 0) : (int)($fallback['active'] ?? 1);
 
-    $name = trim((string)$data['name']);
-    $description = isset($data['description']) ? trim((string)$data['description']) : '';
-    $duration = filter_var($data['duration_minutes'] ?? 60, FILTER_VALIDATE_INT, ['options' => ['min_range' => 5, 'max_range' => 1440]]);
-    $priceRaw = $data['price'] ?? null;
-
+    if ($name === '') respond(['error' => 'El nombre del servicio es obligatorio'], 422);
     if (strlen($name) > 140) respond(['error' => 'El nombre del servicio es demasiado largo'], 422);
     if ($duration === false) respond(['error' => 'Duración inválida'], 422);
 
@@ -32,15 +32,69 @@ if ($method === 'POST') {
         if ($price < 0 || $price > 99999999.99) respond(['error' => 'Precio fuera de rango'], 422);
     }
 
-    $stmt = $pdo->prepare('INSERT INTO services (name, description, duration_minutes, price, active) VALUES (:name, :description, :duration, :price, :active)');
-    $stmt->execute([
+    return [
         'name' => $name,
         'description' => $description !== '' ? $description : null,
         'duration' => $duration,
         'price' => $price,
-        'active' => !isset($data['active']) || (bool)$data['active'] ? 1 : 0,
-    ]);
+        'active' => $active,
+    ];
+}
+
+if ($method === 'GET') {
+    $stmt = $pdo->query('SELECT id, name, description, duration_minutes, price, active FROM services ORDER BY active DESC, name');
+    respond(['data' => $stmt->fetchAll()]);
+}
+
+if ($method === 'POST') {
+    $data = jsonInput();
+    requireFields($data, ['name']);
+    $service = normalizeService($data);
+    $stmt = $pdo->prepare('INSERT INTO services (name, description, duration_minutes, price, active) VALUES (:name, :description, :duration, :price, :active)');
+    $stmt->execute($service);
     respond(['id' => (int)$pdo->lastInsertId()], 201);
+}
+
+if ($method === 'PATCH') {
+    $data = jsonInput();
+    $id = serviceId($data['id'] ?? null);
+    if ($id === false) respond(['error' => 'Servicio inválido'], 422);
+
+    $stmt = $pdo->prepare('SELECT name, description, duration_minutes, price, active FROM services WHERE id=:id LIMIT 1');
+    $stmt->execute(['id' => $id]);
+    $current = $stmt->fetch();
+    if (!$current) respond(['error' => 'El servicio no existe'], 404);
+
+    $service = normalizeService($data, $current);
+    $service['id'] = $id;
+    $stmt = $pdo->prepare('UPDATE services SET name=:name, description=:description, duration_minutes=:duration, price=:price, active=:active WHERE id=:id');
+    $stmt->execute($service);
+    respond(['ok' => true]);
+}
+
+if ($method === 'DELETE') {
+    $data = jsonInput();
+    $id = serviceId($data['id'] ?? null);
+    if ($id === false) respond(['error' => 'Servicio inválido'], 422);
+
+    $stmt = $pdo->prepare('SELECT name FROM services WHERE id=:id LIMIT 1');
+    $stmt->execute(['id' => $id]);
+    if (!$stmt->fetchColumn()) respond(['error' => 'El servicio no existe'], 404);
+
+    try {
+        $pdo->beginTransaction();
+        $stmt = $pdo->prepare('DELETE FROM treatments WHERE service_id=:id');
+        $stmt->execute(['id' => $id]);
+        $stmt = $pdo->prepare('DELETE FROM appointments WHERE service_id=:id');
+        $stmt->execute(['id' => $id]);
+        $stmt = $pdo->prepare('DELETE FROM services WHERE id=:id');
+        $stmt->execute(['id' => $id]);
+        $pdo->commit();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        respond(['error' => 'No se pudo eliminar el servicio'], 500);
+    }
+    respond(['ok' => true]);
 }
 
 respond(['error' => 'Method not allowed'], 405);
