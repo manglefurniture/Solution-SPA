@@ -10,7 +10,8 @@ const modalFields=document.getElementById('modalFields');
 const modalSave=document.getElementById('modalSave');
 const modalStatus=document.getElementById('modalStatus');
 const serviceCards=document.querySelector('.servicecards');
-const defaultServiceCards=serviceCards.innerHTML;
+const homeAgenda=document.getElementById('homeAgenda');
+const agendaList=document.getElementById('agendaList');
 let currentView='home';
 let currentAction='appointment';
 
@@ -31,6 +32,11 @@ function localDate(){
   const m=String(d.getMonth()+1).padStart(2,'0');
   const day=String(d.getDate()).padStart(2,'0');
   return `${y}-${m}-${day}`;
+}
+
+function setCurrentDate(){
+  const text=new Intl.DateTimeFormat('es-MX',{weekday:'long',day:'numeric',month:'long'}).format(new Date());
+  document.getElementById('currentDate').textContent=text.toUpperCase().replace(' DE ',' · ');
 }
 
 function updateAddButton(animate=false){
@@ -103,14 +109,15 @@ async function openContextModal(){
         apiData('../backend/api/clients.php'),
         apiData('../backend/api/services.php')
       ]);
-      const canSave=clientRows.length>0&&serviceRows.length>0;
+      const activeServices=serviceRows.filter(s=>Number(s.active)!==0);
+      const canSave=clientRows.length>0&&activeServices.length>0;
       const clientOptions=clientRows.map(c=>`<option value="${Number(c.id)}">${escapeHtml(c.name)}</option>`).join('');
-      const serviceOptions=serviceRows.filter(s=>Number(s.active)!==0).map(s=>`<option value="${Number(s.id)}">${escapeHtml(s.name)}</option>`).join('');
+      const serviceOptions=activeServices.map(s=>`<option value="${Number(s.id)}">${escapeHtml(s.name)}</option>`).join('');
       modalFields.innerHTML=`
         ${!clientRows.length?'<div class="empty-note">Aún no hay clientes registrados. Entra a <b>Clientes</b> y usa el botón + para crear el primero.</div>':''}
-        ${!serviceRows.length?'<div class="empty-note">Aún no hay servicios registrados. Entra a <b>Servicios</b> y usa el botón + para crear el primero.</div>':''}
+        ${!activeServices.length?'<div class="empty-note">Aún no hay servicios registrados. Entra a <b>Servicios</b> y usa el botón + para crear el primero.</div>':''}
         <label>Cliente<select name="client_id" required ${!clientRows.length?'disabled':''}><option value="">Selecciona una clienta</option>${clientOptions}</select></label>
-        <label>Servicio<select name="service_id" required ${!serviceRows.length?'disabled':''}><option value="">Selecciona un tratamiento</option>${serviceOptions}</select></label>
+        <label>Servicio<select name="service_id" required ${!activeServices.length?'disabled':''}><option value="">Selecciona un tratamiento</option>${serviceOptions}</select></label>
         <div class="row"><label>Fecha<input name="date" type="date" value="${localDate()}" required></label><label>Hora<input name="time" type="time" required></label></div>`;
       modalSave.disabled=!canSave;
     }catch(e){
@@ -165,7 +172,7 @@ async function clients(){
   try{
     const rows=await apiData('../backend/api/clients.php');
     document.getElementById('clientCount').textContent=rows.length;
-    if(!rows.length){list.innerHTML='<p class="loading">La base está lista. El primer cliente aparecerá aquí.</p>';return}
+    if(!rows.length){list.innerHTML='<p class="empty-note">Aún no hay clientes registrados.</p>';return}
     list.innerHTML=rows.slice(0,50).map((c,i)=>{
       const name=c.name||`Cliente ${i+1}`;
       const phone=c.phone||'Sin teléfono';
@@ -174,32 +181,78 @@ async function clients(){
     }).join('');
   }catch(e){
     document.getElementById('clientCount').textContent='0';
-    list.innerHTML='<p class="loading">No pude consultar clientes ahora mismo.</p>';
+    list.innerHTML='<p class="empty-note">No pude consultar clientes ahora mismo.</p>';
   }
 }
 
 async function services(){
   try{
     const rows=await apiData('../backend/api/services.php');
-    if(!rows.length){serviceCards.innerHTML=defaultServiceCards;return}
-    serviceCards.innerHTML=rows.map(s=>`<article><i>✦</i><b>${escapeHtml(s.name)}</b><span>${Number(s.duration_minutes)||60} min${s.price!==null&&s.price!==undefined?` · $${Number(s.price).toLocaleString('es-MX')}`:''}</span></article>`).join('');
-  }catch(e){serviceCards.innerHTML=defaultServiceCards}
+    const activeRows=rows.filter(s=>Number(s.active)!==0);
+    document.getElementById('serviceCount').textContent=activeRows.length;
+    if(!activeRows.length){serviceCards.innerHTML='<p class="empty-note">Aún no hay servicios registrados.</p>';return}
+    serviceCards.innerHTML=activeRows.map(s=>`<article><i>✦</i><b>${escapeHtml(s.name)}</b><span>${Number(s.duration_minutes)||60} min${s.price!==null&&s.price!==undefined?` · $${Number(s.price).toLocaleString('es-MX')}`:''}</span></article>`).join('');
+  }catch(e){
+    document.getElementById('serviceCount').textContent='0';
+    serviceCards.innerHTML='<p class="empty-note">No pude consultar los servicios ahora mismo.</p>';
+  }
+}
+
+function appointmentHtml(a,includeDuration=true){
+  const raw=String(a.starts_at||'');
+  const time=(raw.split(' ')[1]||raw.split('T')[1]||'').slice(0,5)||'—';
+  const status=a.status==='confirmed'?'Confirmada':a.status==='completed'?'Realizada':a.status==='cancelled'?'Cancelada':'Pendiente';
+  const duration=Number(a.duration_minutes)||0;
+  return `<div class="appointment${a.status==='pending'?' muted':''}"><time>${escapeHtml(time)}${includeDuration&&duration?`<small>${duration} min</small>`:''}</time><i></i><div><b>${escapeHtml(a.client_name||'Cliente')}</b><span>${escapeHtml(a.service_name||'Servicio')}</span></div><mark>${status}</mark></div>`;
 }
 
 async function appointments(){
+  const today=document.getElementById('todayCount');
+  const pending=document.getElementById('todayPending');
+  const nextTime=document.getElementById('nextTime');
+  const nextClient=document.getElementById('nextClient');
   try{
     const rows=await apiData(`../backend/api/appointments.php?date=${localDate()}`);
-    if(!rows.length)return;
-    const list=document.querySelector('#agenda .list');
-    list.innerHTML=rows.map(a=>{
-      const raw=String(a.starts_at||'');
-      const time=(raw.split(' ')[1]||raw.split('T')[1]||'').slice(0,5)||'—';
-      const status=a.status==='confirmed'?'Confirmada':a.status==='completed'?'Realizada':a.status==='cancelled'?'Cancelada':'Pendiente';
-      return `<div class="appointment${a.status==='pending'?' muted':''}"><time>${escapeHtml(time)}</time><i></i><div><b>${escapeHtml(a.client_name||'Cliente')}</b><span>${escapeHtml(a.service_name||'Servicio')}</span></div><mark>${status}</mark></div>`;
-    }).join('');
-  }catch(e){}
+    today.textContent=rows.length;
+    const pendingCount=rows.filter(a=>a.status!=='completed'&&a.status!=='cancelled').length;
+    pending.textContent=rows.length?`${pendingCount} por atender`:'Sin citas registradas';
+
+    if(!rows.length){
+      homeAgenda.innerHTML='<p class="empty-note">Aún no hay citas para hoy. Cuando registres una, aparecerá aquí.</p>';
+      agendaList.innerHTML='<p class="empty-note">No hay citas registradas para hoy.</p>';
+      nextTime.textContent='—';
+      nextClient.textContent='Sin cita próxima';
+      return;
+    }
+
+    homeAgenda.innerHTML=rows.map(a=>appointmentHtml(a,true)).join('');
+    agendaList.innerHTML=rows.map(a=>appointmentHtml(a,false)).join('');
+
+    const now=new Date();
+    const upcoming=rows.find(a=>{
+      if(a.status==='completed'||a.status==='cancelled')return false;
+      const dt=new Date(String(a.starts_at).replace(' ','T'));
+      return !Number.isNaN(dt.getTime())&&dt>=now;
+    });
+    if(upcoming){
+      const raw=String(upcoming.starts_at||'');
+      nextTime.textContent=(raw.split(' ')[1]||raw.split('T')[1]||'').slice(0,5)||'—';
+      nextClient.textContent=upcoming.client_name||'Próxima cita';
+    }else{
+      nextTime.textContent='—';
+      nextClient.textContent='Sin cita próxima';
+    }
+  }catch(e){
+    today.textContent='0';
+    pending.textContent='No se pudo consultar';
+    homeAgenda.innerHTML='<p class="empty-note">No pude consultar la agenda ahora mismo.</p>';
+    agendaList.innerHTML='<p class="empty-note">No pude consultar la agenda ahora mismo.</p>';
+    nextTime.textContent='—';
+    nextClient.textContent='Sin datos';
+  }
 }
 
+setCurrentDate();
 updateAddButton();
 clients();
 services();
