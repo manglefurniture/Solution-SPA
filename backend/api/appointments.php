@@ -24,6 +24,41 @@ function strictDateTime(string $value): ?DateTimeImmutable
     return $date;
 }
 
+function validEntityId(mixed $value): int|false
+{
+    return filter_var($value, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+}
+
+function ensureClient(PDO $pdo, int $id): void
+{
+    $stmt = $pdo->prepare('SELECT 1 FROM clients WHERE id = :id LIMIT 1');
+    $stmt->execute(['id' => $id]);
+    if (!$stmt->fetchColumn()) respond(['error' => 'El cliente no existe'], 422);
+}
+
+function ensureService(PDO $pdo, int $id): void
+{
+    $stmt = $pdo->prepare('SELECT active FROM services WHERE id = :id LIMIT 1');
+    $stmt->execute(['id' => $id]);
+    $active = $stmt->fetchColumn();
+    if ($active === false) respond(['error' => 'El servicio no existe'], 422);
+    if ((int)$active !== 1) respond(['error' => 'El servicio está inactivo'], 422);
+}
+
+function ensureNoExactConflict(PDO $pdo, string $startsAt, ?int $excludeId = null): void
+{
+    $sql = "SELECT id FROM appointments WHERE starts_at = :starts_at AND status IN ('pending','confirmed')";
+    $params = ['starts_at' => $startsAt];
+    if ($excludeId !== null) {
+        $sql .= ' AND id <> :id';
+        $params['id'] = $excludeId;
+    }
+    $sql .= ' LIMIT 1';
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    if ($stmt->fetchColumn()) respond(['error' => 'Ya existe una cita activa exactamente a esa hora'], 409);
+}
+
 $select = "SELECT a.id, a.starts_at, a.status, a.notes,
                   c.id AS client_id, c.name AS client_name, c.phone,
                   s.id AS service_id, s.name AS service_name, s.duration_minutes
@@ -35,21 +70,31 @@ if ($method === 'GET') {
     $date = trim((string)($_GET['date'] ?? ''));
     $month = trim((string)($_GET['month'] ?? ''));
     $nextFrom = trim((string)($_GET['next_from'] ?? ''));
+    $clientIdRaw = trim((string)($_GET['client_id'] ?? ''));
+    $idRaw = trim((string)($_GET['id'] ?? ''));
     $sql = $select;
     $params = [];
     $limit = 500;
+    $where = [];
 
-    if ($nextFrom !== '') {
+    if ($idRaw !== '') {
+        $id = validEntityId($idRaw);
+        if ($id === false) respond(['error' => 'Cita inválida'], 422);
+        $where[] = 'a.id = :id';
+        $params['id'] = $id;
+        $limit = 1;
+    } elseif ($nextFrom !== '') {
         $from = strictDateTime($nextFrom);
         if (!$from) respond(['error' => 'Invalid next_from'], 422);
-        $sql .= " WHERE a.starts_at >= :from AND a.status IN ('pending','confirmed')";
+        $where[] = 'a.starts_at >= :from';
+        $where[] = "a.status IN ('pending','confirmed')";
         $params['from'] = $from->format('Y-m-d H:i:s');
-        $limit = 1;
+        $limit = isset($_GET['limit']) ? max(1, min(20, (int)$_GET['limit'])) : 1;
     } elseif ($date !== '') {
         $start = strictDate($date);
         if (!$start) respond(['error' => 'Invalid date'], 422);
         $end = $start->modify('+1 day');
-        $sql .= ' WHERE a.starts_at >= :start AND a.starts_at < :end';
+        $where[] = 'a.starts_at >= :start AND a.starts_at < :end';
         $params['start'] = $start->format('Y-m-d H:i:s');
         $params['end'] = $end->format('Y-m-d H:i:s');
     } elseif ($month !== '') {
@@ -59,12 +104,21 @@ if ($method === 'GET') {
         if ($monthNumber < 1 || $monthNumber > 12) respond(['error' => 'Invalid month'], 422);
         $start = new DateTimeImmutable(sprintf('%04d-%02d-01 00:00:00', $year, $monthNumber));
         $end = $start->modify('first day of next month');
-        $sql .= ' WHERE a.starts_at >= :start AND a.starts_at < :end';
+        $where[] = 'a.starts_at >= :start AND a.starts_at < :end';
         $params['start'] = $start->format('Y-m-d H:i:s');
         $params['end'] = $end->format('Y-m-d H:i:s');
     }
 
-    $sql .= ' ORDER BY a.starts_at ASC LIMIT ' . $limit;
+    if ($clientIdRaw !== '') {
+        $clientId = validEntityId($clientIdRaw);
+        if ($clientId === false) respond(['error' => 'Cliente inválido'], 422);
+        $where[] = 'a.client_id = :client_id';
+        $params['client_id'] = $clientId;
+        $limit = min($limit, 100);
+    }
+
+    if ($where) $sql .= ' WHERE ' . implode(' AND ', $where);
+    $sql .= ' ORDER BY a.starts_at ' . ($clientIdRaw !== '' ? 'DESC' : 'ASC') . ' LIMIT ' . $limit;
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     respond(['data' => $stmt->fetchAll()]);
@@ -73,25 +127,17 @@ if ($method === 'GET') {
 if ($method === 'POST') {
     $data = jsonInput();
     requireFields($data, ['client_id', 'service_id', 'starts_at']);
-    $clientId = filter_var($data['client_id'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
-    $serviceId = filter_var($data['service_id'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+    $clientId = validEntityId($data['client_id']);
+    $serviceId = validEntityId($data['service_id']);
     if ($clientId === false || $serviceId === false) respond(['error' => 'Cliente o servicio inválido'], 422);
     $startsAt = strictDateTime(trim((string)$data['starts_at']));
     if (!$startsAt) respond(['error' => 'Fecha u hora inválida'], 422);
     $status = (string)($data['status'] ?? 'pending');
     $allowed = ['pending', 'confirmed', 'completed', 'cancelled'];
     if (!in_array($status, $allowed, true)) respond(['error' => 'Estado inválido'], 422);
-
-    $clientCheck = $pdo->prepare('SELECT 1 FROM clients WHERE id = :id LIMIT 1');
-    $clientCheck->execute(['id' => $clientId]);
-    if (!$clientCheck->fetchColumn()) respond(['error' => 'El cliente no existe'], 422);
-
-    $serviceCheck = $pdo->prepare('SELECT active FROM services WHERE id = :id LIMIT 1');
-    $serviceCheck->execute(['id' => $serviceId]);
-    $serviceActive = $serviceCheck->fetchColumn();
-    if ($serviceActive === false) respond(['error' => 'El servicio no existe'], 422);
-    if ((int)$serviceActive !== 1) respond(['error' => 'El servicio está inactivo'], 422);
-
+    ensureClient($pdo, $clientId);
+    ensureService($pdo, $serviceId);
+    if (in_array($status, ['pending','confirmed'], true)) ensureNoExactConflict($pdo, $startsAt->format('Y-m-d H:i:s'));
     $notes = isset($data['notes']) ? trim((string)$data['notes']) : null;
     $stmt = $pdo->prepare('INSERT INTO appointments (client_id, service_id, starts_at, status, notes) VALUES (:client_id, :service_id, :starts_at, :status, :notes)');
     $stmt->execute([
@@ -102,6 +148,41 @@ if ($method === 'POST') {
         'notes' => $notes !== '' ? $notes : null,
     ]);
     respond(['id' => (int)$pdo->lastInsertId()], 201);
+}
+
+if ($method === 'PATCH') {
+    $data = jsonInput();
+    $id = validEntityId($data['id'] ?? null);
+    if ($id === false) respond(['error' => 'Cita inválida'], 422);
+
+    $stmt = $pdo->prepare('SELECT client_id, service_id, starts_at, status, notes FROM appointments WHERE id = :id LIMIT 1');
+    $stmt->execute(['id' => $id]);
+    $current = $stmt->fetch();
+    if (!$current) respond(['error' => 'La cita no existe'], 404);
+
+    $clientId = isset($data['client_id']) ? validEntityId($data['client_id']) : (int)$current['client_id'];
+    $serviceId = isset($data['service_id']) ? validEntityId($data['service_id']) : (int)$current['service_id'];
+    if ($clientId === false || $serviceId === false) respond(['error' => 'Cliente o servicio inválido'], 422);
+    $startsAt = isset($data['starts_at']) ? strictDateTime(trim((string)$data['starts_at'])) : new DateTimeImmutable((string)$current['starts_at']);
+    if (!$startsAt) respond(['error' => 'Fecha u hora inválida'], 422);
+    $status = isset($data['status']) ? (string)$data['status'] : (string)$current['status'];
+    $allowed = ['pending', 'confirmed', 'completed', 'cancelled'];
+    if (!in_array($status, $allowed, true)) respond(['error' => 'Estado inválido'], 422);
+    ensureClient($pdo, $clientId);
+    ensureService($pdo, $serviceId);
+    if (in_array($status, ['pending','confirmed'], true)) ensureNoExactConflict($pdo, $startsAt->format('Y-m-d H:i:s'), $id);
+    $notes = array_key_exists('notes', $data) ? trim((string)$data['notes']) : (string)($current['notes'] ?? '');
+
+    $stmt = $pdo->prepare('UPDATE appointments SET client_id=:client_id, service_id=:service_id, starts_at=:starts_at, status=:status, notes=:notes WHERE id=:id');
+    $stmt->execute([
+        'client_id' => $clientId,
+        'service_id' => $serviceId,
+        'starts_at' => $startsAt->format('Y-m-d H:i:s'),
+        'status' => $status,
+        'notes' => $notes !== '' ? $notes : null,
+        'id' => $id,
+    ]);
+    respond(['ok' => true]);
 }
 
 respond(['error' => 'Method not allowed'], 405);
