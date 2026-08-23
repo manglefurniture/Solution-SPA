@@ -6,8 +6,14 @@
 <title>Solution SPA · Gestión</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="admin-v2.css?v=20260823-1243">
-<style>@media(max-width:380px){.calendar-day .day-count{font-size:7px!important;width:auto!important;height:auto!important;padding:3px 5px!important}}</style>
+<link rel="stylesheet" href="admin-v2.css?v=20260823-1247">
+<style>
+.calendar-day:not(.has-appointments) .day-count{display:none!important}
+.calendar-day.has-appointments:not(.is-selected){background:#fbf3ef;border-color:#d8b3a8;box-shadow:inset 0 0 0 1px rgba(197,142,130,.15)}
+.calendar-day.has-appointments .day-count{display:grid;place-items:center;min-width:24px;height:24px;padding:0 7px;border-radius:999px;background:#b97f70;color:#fff;font-size:9px;font-weight:700;box-shadow:0 4px 10px rgba(121,78,68,.22)}
+.calendar-day.is-selected.has-appointments .day-count{background:#f0c8bd;color:#302626;box-shadow:none}
+@media(max-width:380px){.calendar-day.has-appointments .day-count{font-size:7px!important;min-width:20px!important;width:auto!important;height:20px!important;padding:0 5px!important}.calendar-day:not(.has-appointments) .day-count{display:none!important}}
+</style>
 </head>
 <body>
 <header class="topbar"><div class="logo"><b>S</b><span>Solution<small>SPA · GESTIÓN</small></span></div><nav class="topnav"><button class="active" data-view="home">Inicio</button><button data-view="agenda">Agenda</button><button data-view="clients">Clientes</button><button data-view="services">Servicios</button></nav><button class="new topnew" id="contextAdd" aria-label="Nueva cita">＋ <span>Nueva cita</span></button></header>
@@ -43,5 +49,5 @@
 <section id="services" class="view"><div class="title"><span>PROTOCOLOS</span><h2>Servicios</h2><p>La carta de tratamientos registrada en el sistema.</p></div><div class="servicecards"><p class="empty-note">Aún no hay servicios registrados.</p></div></section>
 </main>
 <div class="modal" id="modal"><form id="contextForm"><button type="button" class="close">×</button><span id="modalEyebrow">NUEVA RESERVA</span><h2 id="modalTitle">Crear cita</h2><div id="modalFields"></div><button class="save" id="modalSave" type="submit">Guardar</button><p class="pilot" id="modalStatus"></p></form></div>
-<script src="admin.js?v=20260823-1243"></script>
+<script src="admin.js?v=20260823-1247"></script>
 </body></html>
