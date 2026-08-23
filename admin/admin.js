@@ -33,18 +33,25 @@ function localDate(){
   return `${y}-${m}-${day}`;
 }
 
-function updateAddButton(){
+function updateAddButton(animate=false){
   const action=actionByView[currentView]||actionByView.home;
   addLabel.textContent=action.label;
+  addButton.dataset.kind=action.type;
   addButton.setAttribute('aria-label',action.label);
   addButton.title=action.label;
+  if(animate){
+    addButton.classList.remove('context-change');
+    void addButton.offsetWidth;
+    addButton.classList.add('context-change');
+    window.setTimeout(()=>addButton.classList.remove('context-change'),380);
+  }
 }
 
 function show(id){
   currentView=id;
   views.forEach(v=>v.classList.toggle('active',v.id===id));
   navButtons.forEach(b=>b.classList.toggle('active',b.dataset.view===id));
-  updateAddButton();
+  updateAddButton(true);
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
