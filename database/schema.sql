@@ -1,0 +1,68 @@
+CREATE DATABASE IF NOT EXISTS solution_spa CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE solution_spa;
+
+CREATE TABLE IF NOT EXISTS clients (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(120) NOT NULL,
+  phone VARCHAR(30) NOT NULL,
+  email VARCHAR(160) NULL,
+  birth_date DATE NULL,
+  notes TEXT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_clients_name (name),
+  INDEX idx_clients_phone (phone)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS services (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(140) NOT NULL,
+  description TEXT NULL,
+  duration_minutes SMALLINT UNSIGNED NOT NULL DEFAULT 60,
+  price DECIMAL(10,2) NULL,
+  active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_services_active (active)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS appointments (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  client_id BIGINT UNSIGNED NOT NULL,
+  service_id BIGINT UNSIGNED NOT NULL,
+  starts_at DATETIME NOT NULL,
+  status ENUM('pending','confirmed','completed','cancelled') NOT NULL DEFAULT 'pending',
+  notes TEXT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_appointments_client FOREIGN KEY (client_id) REFERENCES clients(id),
+  CONSTRAINT fk_appointments_service FOREIGN KEY (service_id) REFERENCES services(id),
+  INDEX idx_appointments_starts_at (starts_at),
+  INDEX idx_appointments_status (status)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS treatments (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  client_id BIGINT UNSIGNED NOT NULL,
+  service_id BIGINT UNSIGNED NULL,
+  appointment_id BIGINT UNSIGNED NULL,
+  performed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  notes TEXT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_treatments_client FOREIGN KEY (client_id) REFERENCES clients(id),
+  CONSTRAINT fk_treatments_service FOREIGN KEY (service_id) REFERENCES services(id),
+  CONSTRAINT fk_treatments_appointment FOREIGN KEY (appointment_id) REFERENCES appointments(id),
+  INDEX idx_treatments_client (client_id),
+  INDEX idx_treatments_performed_at (performed_at)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS users (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(120) NOT NULL,
+  email VARCHAR(160) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  role ENUM('admin','staff') NOT NULL DEFAULT 'admin',
+  active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
