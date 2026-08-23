@@ -12,8 +12,16 @@ const modalStatus=document.getElementById('modalStatus');
 const serviceCards=document.querySelector('.servicecards');
 const homeAgenda=document.getElementById('homeAgenda');
 const agendaList=document.getElementById('agendaList');
+const calendarGrid=document.getElementById('calendarGrid');
+const calendarMonth=document.getElementById('calendarMonth');
+const selectedDayTitle=document.getElementById('selectedDayTitle');
+const selectedDayCount=document.getElementById('selectedDayCount');
 let currentView='home';
 let currentAction='appointment';
+let selectedDate=localDate();
+const nowForCalendar=new Date();
+let calendarCursor=new Date(nowForCalendar.getFullYear(),nowForCalendar.getMonth(),1);
+let monthAppointments=[];
 
 const actionByView={
   home:{type:'appointment',label:'Nueva cita',eyebrow:'NUEVA RESERVA',title:'Crear cita'},
@@ -26,12 +34,24 @@ function escapeHtml(value=''){
   return String(value).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[c]));
 }
 
-function localDate(){
-  const d=new Date();
-  const y=d.getFullYear();
-  const m=String(d.getMonth()+1).padStart(2,'0');
-  const day=String(d.getDate()).padStart(2,'0');
+function localDate(date=new Date()){
+  const y=date.getFullYear();
+  const m=String(date.getMonth()+1).padStart(2,'0');
+  const day=String(date.getDate()).padStart(2,'0');
   return `${y}-${m}-${day}`;
+}
+
+function monthKey(date){
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
+}
+
+function dateFromKey(key){
+  const [y,m,d]=key.split('-').map(Number);
+  return new Date(y,m-1,d);
+}
+
+function appointmentDateKey(a){
+  return String(a.starts_at||'').slice(0,10);
 }
 
 function setCurrentDate(){
@@ -58,6 +78,7 @@ function show(id){
   views.forEach(v=>v.classList.toggle('active',v.id===id));
   navButtons.forEach(b=>b.classList.toggle('active',b.dataset.view===id));
   updateAddButton(true);
+  if(id==='agenda')loadCalendar();
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
@@ -113,12 +134,13 @@ async function openContextModal(){
       const canSave=clientRows.length>0&&activeServices.length>0;
       const clientOptions=clientRows.map(c=>`<option value="${Number(c.id)}">${escapeHtml(c.name)}</option>`).join('');
       const serviceOptions=activeServices.map(s=>`<option value="${Number(s.id)}">${escapeHtml(s.name)}</option>`).join('');
+      const defaultDate=currentView==='agenda'?selectedDate:localDate();
       modalFields.innerHTML=`
         ${!clientRows.length?'<div class="empty-note">Aún no hay clientes registrados. Entra a <b>Clientes</b> y usa el botón + para crear el primero.</div>':''}
         ${!activeServices.length?'<div class="empty-note">Aún no hay servicios registrados. Entra a <b>Servicios</b> y usa el botón + para crear el primero.</div>':''}
         <label>Cliente<select name="client_id" required ${!clientRows.length?'disabled':''}><option value="">Selecciona una clienta</option>${clientOptions}</select></label>
         <label>Servicio<select name="service_id" required ${!activeServices.length?'disabled':''}><option value="">Selecciona un tratamiento</option>${serviceOptions}</select></label>
-        <div class="row"><label>Fecha<input name="date" type="date" value="${localDate()}" required></label><label>Hora<input name="time" type="time" required></label></div>`;
+        <div class="row"><label>Fecha<input name="date" type="date" value="${defaultDate}" required></label><label>Hora<input name="time" type="time" required></label></div>`;
       modalSave.disabled=!canSave;
     }catch(e){
       modalFields.innerHTML='<div class="empty-note">No pude cargar los datos ahora mismo. Intenta de nuevo.</div>';
@@ -152,8 +174,12 @@ form.addEventListener('submit',async e=>{
       await services();
     }
     if(currentAction==='appointment'){
-      await postJson('../backend/api/appointments.php',{client_id:Number(fd.get('client_id')),service_id:Number(fd.get('service_id')),starts_at:`${fd.get('date')} ${fd.get('time')}:00`,status:'confirmed'});
-      await appointments();
+      const newDate=String(fd.get('date'));
+      await postJson('../backend/api/appointments.php',{client_id:Number(fd.get('client_id')),service_id:Number(fd.get('service_id')),starts_at:`${newDate} ${fd.get('time')}:00`,status:'confirmed'});
+      selectedDate=newDate;
+      const d=dateFromKey(newDate);
+      calendarCursor=new Date(d.getFullYear(),d.getMonth(),1);
+      await Promise.all([appointments(),loadCalendar()]);
     }
     modalStatus.textContent='Guardado correctamente ✓';
     modalStatus.className='pilot success';
@@ -212,25 +238,22 @@ async function appointments(){
   const nextTime=document.getElementById('nextTime');
   const nextClient=document.getElementById('nextClient');
   try{
-    const rows=await apiData(`../backend/api/appointments.php?date=${localDate()}`);
+    const rows=(await apiData(`../backend/api/appointments.php?date=${localDate()}`)).filter(a=>a.status!=='cancelled');
     today.textContent=rows.length;
-    const pendingCount=rows.filter(a=>a.status!=='completed'&&a.status!=='cancelled').length;
+    const pendingCount=rows.filter(a=>a.status!=='completed').length;
     pending.textContent=rows.length?`${pendingCount} por atender`:'Sin citas registradas';
 
     if(!rows.length){
       homeAgenda.innerHTML='<p class="empty-note">Aún no hay citas para hoy. Cuando registres una, aparecerá aquí.</p>';
-      agendaList.innerHTML='<p class="empty-note">No hay citas registradas para hoy.</p>';
       nextTime.textContent='—';
       nextClient.textContent='Sin cita próxima';
       return;
     }
 
     homeAgenda.innerHTML=rows.map(a=>appointmentHtml(a,true)).join('');
-    agendaList.innerHTML=rows.map(a=>appointmentHtml(a,false)).join('');
-
     const now=new Date();
     const upcoming=rows.find(a=>{
-      if(a.status==='completed'||a.status==='cancelled')return false;
+      if(a.status==='completed')return false;
       const dt=new Date(String(a.starts_at).replace(' ','T'));
       return !Number.isNaN(dt.getTime())&&dt>=now;
     });
@@ -246,14 +269,87 @@ async function appointments(){
     today.textContent='0';
     pending.textContent='No se pudo consultar';
     homeAgenda.innerHTML='<p class="empty-note">No pude consultar la agenda ahora mismo.</p>';
-    agendaList.innerHTML='<p class="empty-note">No pude consultar la agenda ahora mismo.</p>';
     nextTime.textContent='—';
     nextClient.textContent='Sin datos';
   }
 }
+
+function selectedDayRows(){
+  return monthAppointments.filter(a=>a.status!=='cancelled'&&appointmentDateKey(a)===selectedDate);
+}
+
+function renderSelectedDay(){
+  const date=dateFromKey(selectedDate);
+  selectedDayTitle.textContent=new Intl.DateTimeFormat('es-MX',{weekday:'long',day:'numeric',month:'long'}).format(date);
+  const rows=selectedDayRows();
+  selectedDayCount.textContent=`${rows.length} ${rows.length===1?'cita':'citas'}`;
+  agendaList.innerHTML=rows.length?rows.map(a=>appointmentHtml(a,true)).join(''):'<p class="empty-note">No hay citas registradas para este día.</p>';
+}
+
+function renderCalendar(){
+  const year=calendarCursor.getFullYear();
+  const month=calendarCursor.getMonth();
+  calendarMonth.textContent=new Intl.DateTimeFormat('es-MX',{month:'long',year:'numeric'}).format(calendarCursor);
+  const firstDay=new Date(year,month,1);
+  const daysInMonth=new Date(year,month+1,0).getDate();
+  const leading=(firstDay.getDay()+6)%7;
+  const counts={};
+  monthAppointments.filter(a=>a.status!=='cancelled').forEach(a=>{
+    const key=appointmentDateKey(a);
+    counts[key]=(counts[key]||0)+1;
+  });
+
+  const cells=[];
+  for(let i=0;i<leading;i++)cells.push('<div class="calendar-blank" aria-hidden="true"></div>');
+  for(let day=1;day<=daysInMonth;day++){
+    const key=`${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const count=counts[key]||0;
+    const classes=['calendar-day'];
+    if(count>0)classes.push('has-appointments');
+    if(key===localDate())classes.push('is-today');
+    if(key===selectedDate)classes.push('is-selected');
+    cells.push(`<button type="button" class="${classes.join(' ')}" data-date="${key}" aria-label="${day}: ${count} ${count===1?'cita':'citas'}"><span class="day-number">${day}</span><span class="day-count">${count}</span></button>`);
+  }
+  calendarGrid.innerHTML=cells.join('');
+  calendarGrid.querySelectorAll('[data-date]').forEach(button=>button.addEventListener('click',()=>{
+    selectedDate=button.dataset.date;
+    renderCalendar();
+    renderSelectedDay();
+    document.querySelector('.day-detail')?.scrollIntoView({behavior:'smooth',block:'nearest'});
+  }));
+}
+
+async function loadCalendar(){
+  const month=monthKey(calendarCursor);
+  calendarGrid.innerHTML='<p class="loading calendar-loading">Cargando mes…</p>';
+  try{
+    monthAppointments=await apiData(`../backend/api/appointments.php?month=${month}`);
+    if(!selectedDate.startsWith(month))selectedDate=`${month}-01`;
+    renderCalendar();
+    renderSelectedDay();
+  }catch(e){
+    monthAppointments=[];
+    calendarGrid.innerHTML='<p class="empty-note calendar-loading">No pude consultar este mes ahora mismo.</p>';
+    selectedDayCount.textContent='0 citas';
+    agendaList.innerHTML='<p class="empty-note">No pude consultar las citas de este día.</p>';
+  }
+}
+
+document.getElementById('prevMonth').addEventListener('click',()=>{
+  calendarCursor=new Date(calendarCursor.getFullYear(),calendarCursor.getMonth()-1,1);
+  selectedDate=`${monthKey(calendarCursor)}-01`;
+  loadCalendar();
+});
+
+document.getElementById('nextMonth').addEventListener('click',()=>{
+  calendarCursor=new Date(calendarCursor.getFullYear(),calendarCursor.getMonth()+1,1);
+  selectedDate=`${monthKey(calendarCursor)}-01`;
+  loadCalendar();
+});
 
 setCurrentDate();
 updateAddButton();
 clients();
 services();
 appointments();
+loadCalendar();
