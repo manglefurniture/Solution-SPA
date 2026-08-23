@@ -28,13 +28,13 @@ if ($method === 'POST') {
     $birthDate = isset($data['birth_date']) ? trim((string)$data['birth_date']) : '';
     $notes = isset($data['notes']) ? trim((string)$data['notes']) : '';
 
-    if (mb_strlen($name) > 120) {
+    if (strlen($name) > 240) {
         respond(['error' => 'El nombre es demasiado largo'], 422);
     }
-    if (mb_strlen($phone) > 30) {
+    if (strlen($phone) > 30) {
         respond(['error' => 'El teléfono es demasiado largo'], 422);
     }
-    if ($email !== '' && (mb_strlen($email) > 160 || !filter_var($email, FILTER_VALIDATE_EMAIL))) {
+    if ($email !== '' && (strlen($email) > 160 || !filter_var($email, FILTER_VALIDATE_EMAIL))) {
         respond(['error' => 'Correo inválido'], 422);
     }
     if ($birthDate !== '') {
