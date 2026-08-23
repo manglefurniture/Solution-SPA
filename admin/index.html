@@ -6,21 +6,26 @@
 <title>Solution SPA · Gestión</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="admin-v2.css?v=20260823-1222">
+<link rel="stylesheet" href="admin-v2.css?v=20260823-1232">
 </head>
 <body>
 <header class="topbar"><div class="logo"><b>S</b><span>Solution<small>SPA · GESTIÓN</small></span></div><nav class="topnav"><button class="active" data-view="home">Inicio</button><button data-view="agenda">Agenda</button><button data-view="clients">Clientes</button><button data-view="services">Servicios</button></nav><button class="new topnew" id="contextAdd" aria-label="Nueva cita">＋ <span>Nueva cita</span></button></header>
 <main>
-<header class="pagehead"><div><p class="kicker">DOMINGO · 23 AGOSTO</p><h1>Buenos días, <em>Solution.</em></h1></div></header>
+<header class="pagehead"><div><p class="kicker" id="currentDate">HOY</p><h1>Buenos días, <em>Solution.</em></h1></div></header>
 <section id="home" class="view active">
-<div class="stats"><article><small>CITAS DE HOY</small><strong>6</strong><p><b>●</b> 2 por atender</p></article><article><small>CLIENTES ACTIVOS</small><strong id="clientCount">—</strong><p>Base conectada</p></article><article><small>INGRESOS DEL MES</small><strong>$18.4k</strong><p>↑ 12% vs. mes anterior</p></article><article><small>SESIONES PENDIENTES</small><strong>14</strong><p>En paquetes activos</p></article></div>
-<div class="grid"><section class="panel schedule"><div class="panelhead"><div><span>HOY</span><h2>Tu agenda</h2></div><button data-go="agenda">Ver agenda →</button></div><div class="appointment"><time>10:00<small>60 min</small></time><i></i><div><b>Mariana López</b><span>Hidrodermoabrasión · Facial</span></div><mark>Confirmada</mark></div><div class="appointment"><time>12:30<small>45 min</small></time><i></i><div><b>Fernanda Ruiz</b><span>Radiofrecuencia · Facial</span></div><mark>Confirmada</mark></div><div class="appointment muted"><time>16:00<small>60 min</small></time><i></i><div><b>Valeria Santos</b><span>Moldeado corporal</span></div><mark>Pendiente</mark></div></section>
+<div class="stats">
+  <article><small>CITAS DE HOY</small><strong id="todayCount">0</strong><p id="todayPending">Sin citas registradas</p></article>
+  <article><small>CLIENTES ACTIVOS</small><strong id="clientCount">0</strong><p>Registrados en el sistema</p></article>
+  <article><small>SERVICIOS ACTIVOS</small><strong id="serviceCount">0</strong><p>Disponibles para agendar</p></article>
+  <article><small>PRÓXIMA CITA</small><strong id="nextTime">—</strong><p id="nextClient">Sin cita próxima</p></article>
+</div>
+<div class="grid"><section class="panel schedule"><div class="panelhead"><div><span>HOY</span><h2>Tu agenda</h2></div><button data-go="agenda">Ver agenda →</button></div><div id="homeAgenda"><p class="empty-note">Aún no hay citas para hoy. Cuando registres una, aparecerá aquí.</p></div></section>
 <section class="panel focus"><span>EN FOCO</span><h2>Una experiencia que también se administra bonito.</h2><p>Clientes, citas y tratamientos en un solo lugar, sin perder el toque personal de Solution.</p><div class="orb">S</div></section></div>
 </section>
-<section id="agenda" class="view"><div class="title"><span>ORGANIZACIÓN</span><h2>Agenda</h2><p>Una vista limpia de lo que viene.</p></div><div class="panel list"><div class="appointment"><time>10:00</time><i></i><div><b>Mariana López</b><span>Hidrodermoabrasión</span></div><mark>Confirmada</mark></div><div class="appointment"><time>12:30</time><i></i><div><b>Fernanda Ruiz</b><span>Radiofrecuencia</span></div><mark>Confirmada</mark></div><div class="appointment muted"><time>16:00</time><i></i><div><b>Valeria Santos</b><span>Moldeado corporal</span></div><mark>Pendiente</mark></div></div></section>
+<section id="agenda" class="view"><div class="title"><span>ORGANIZACIÓN</span><h2>Agenda</h2><p>Las citas registradas para hoy aparecerán aquí.</p></div><div class="panel list" id="agendaList"><p class="empty-note">No hay citas registradas para hoy.</p></div></section>
 <section id="clients" class="view"><div class="title"><span>RELACIONES</span><h2>Clientes</h2><p>Historia y seguimiento, sin hojas sueltas.</p></div><div class="panel"><div id="clientsList" class="clients"><p class="loading">Consultando clientes…</p></div></div></section>
-<section id="services" class="view"><div class="title"><span>PROTOCOLOS</span><h2>Servicios</h2><p>La carta de tratamientos, siempre a mano.</p></div><div class="servicecards"><article><i>✦</i><b>Hidrodermoabrasión</b><span>Facial · 60 min</span></article><article><i>◌</i><b>Radiofrecuencia</b><span>Facial / corporal</span></article><article><i>◇</i><b>Moldeado corporal</b><span>Corporal · 60 min</span></article><article><i>☼</i><b>Terapia LED</b><span>Facial · 30 min</span></article></div></section>
+<section id="services" class="view"><div class="title"><span>PROTOCOLOS</span><h2>Servicios</h2><p>La carta de tratamientos registrada en el sistema.</p></div><div class="servicecards"><p class="empty-note">Aún no hay servicios registrados.</p></div></section>
 </main>
 <div class="modal" id="modal"><form id="contextForm"><button type="button" class="close">×</button><span id="modalEyebrow">NUEVA RESERVA</span><h2 id="modalTitle">Crear cita</h2><div id="modalFields"></div><button class="save" id="modalSave" type="submit">Guardar</button><p class="pilot" id="modalStatus"></p></form></div>
-<script src="admin.js?v=20260823-1222"></script>
+<script src="admin.js?v=20260823-1232"></script>
 </body></html>
