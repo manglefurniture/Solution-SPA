@@ -8,10 +8,12 @@ CREATE TABLE IF NOT EXISTS clients (
   email VARCHAR(160) NULL,
   birth_date DATE NULL,
   notes TEXT NULL,
+  active TINYINT(1) NOT NULL DEFAULT 1,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_clients_name (name),
-  INDEX idx_clients_phone (phone)
+  INDEX idx_clients_phone (phone),
+  INDEX idx_clients_active (active)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS services (
