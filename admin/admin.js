@@ -41,6 +41,13 @@ function localDate(date=new Date()){
   return `${y}-${m}-${day}`;
 }
 
+function localDateTime(date=new Date()){
+  const h=String(date.getHours()).padStart(2,'0');
+  const min=String(date.getMinutes()).padStart(2,'0');
+  const sec=String(date.getSeconds()).padStart(2,'0');
+  return `${localDate(date)} ${h}:${min}:${sec}`;
+}
+
 function monthKey(date){
   return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
 }
@@ -87,8 +94,8 @@ document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=
 
 async function apiData(url){
   const r=await fetch(url,{cache:'no-store'});
-  if(!r.ok)throw new Error('API error');
-  const data=await r.json();
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(data.error||'No se pudo consultar');
   return Array.isArray(data)?data:(data.data||[]);
 }
 
@@ -106,20 +113,21 @@ async function openContextModal(){
   modalTitle.textContent=action.title;
   modalStatus.textContent='';
   modalStatus.className='pilot';
+  modalSave.hidden=false;
   modalSave.disabled=false;
   modalSave.textContent='Guardar';
 
   if(currentAction==='client'){
     modalFields.innerHTML=`
-      <label>Nombre<input name="name" type="text" placeholder="Nombre completo" required></label>
-      <label>WhatsApp<input name="phone" type="tel" placeholder="Número con lada" required></label>
-      <label>Correo <small>(opcional)</small><input name="email" type="email" placeholder="correo@ejemplo.com"></label>`;
+      <label>Nombre<input name="name" type="text" placeholder="Nombre completo" maxlength="120" required></label>
+      <label>WhatsApp<input name="phone" type="tel" placeholder="Número con lada" maxlength="30" required></label>
+      <label>Correo <small>(opcional)</small><input name="email" type="email" maxlength="160" placeholder="correo@ejemplo.com"></label>`;
   }
 
   if(currentAction==='service'){
     modalFields.innerHTML=`
-      <label>Nombre del servicio<input name="name" type="text" placeholder="Ej. Radiofrecuencia facial" required></label>
-      <div class="row"><label>Duración<input name="duration" type="number" min="5" step="5" value="60" required></label><label>Precio<input name="price" type="number" min="0" step="0.01" placeholder="0.00"></label></div>
+      <label>Nombre del servicio<input name="name" type="text" maxlength="140" placeholder="Ej. Radiofrecuencia facial" required></label>
+      <div class="row"><label>Duración<input name="duration" type="number" min="5" max="1440" step="5" value="60" required></label><label>Precio<input name="price" type="number" min="0" max="99999999.99" step="0.01" placeholder="0.00"></label></div>
       <label>Descripción <small>(opcional)</small><textarea name="description" placeholder="Una descripción breve del tratamiento"></textarea></label>`;
   }
 
@@ -143,7 +151,7 @@ async function openContextModal(){
         <div class="row"><label>Fecha<input name="date" type="date" value="${defaultDate}" required></label><label>Hora<input name="time" type="time" required></label></div>`;
       modalSave.disabled=!canSave;
     }catch(e){
-      modalFields.innerHTML='<div class="empty-note">No pude cargar los datos ahora mismo. Intenta de nuevo.</div>';
+      modalFields.innerHTML=`<div class="empty-note">${escapeHtml(e.message||'No pude cargar los datos ahora mismo.')}</div>`;
       modalSave.disabled=true;
     }
   }
@@ -152,13 +160,31 @@ async function openContextModal(){
   setTimeout(()=>modal.querySelector('input,select,textarea')?.focus(),60);
 }
 
+function openClientCard(client){
+  currentAction='client_view';
+  modalEyebrow.textContent='FICHA DE CLIENTE';
+  modalTitle.textContent=client.name||'Cliente';
+  modalStatus.textContent='';
+  modalSave.hidden=true;
+  const created=client.created_at?new Intl.DateTimeFormat('es-MX',{day:'numeric',month:'long',year:'numeric'}).format(new Date(String(client.created_at).replace(' ','T'))):'—';
+  modalFields.innerHTML=`
+    <div class="client-detail-grid">
+      <div class="detail-item"><small>WHATSAPP</small><strong>${escapeHtml(client.phone||'Sin teléfono')}</strong></div>
+      <div class="detail-item"><small>CORREO</small><strong>${escapeHtml(client.email||'Sin correo')}</strong></div>
+      <div class="detail-item"><small>NACIMIENTO</small><strong>${escapeHtml(client.birth_date||'No registrado')}</strong></div>
+      <div class="detail-item"><small>CLIENTE DESDE</small><strong>${escapeHtml(created)}</strong></div>
+    </div>
+    ${client.notes?`<div class="detail-notes"><small>NOTAS</small><p>${escapeHtml(client.notes)}</p></div>`:''}`;
+  modal.classList.add('open');
+}
+
 addButton.addEventListener('click',openContextModal);
 document.querySelector('.close').addEventListener('click',()=>modal.classList.remove('open'));
 modal.addEventListener('click',e=>{if(e.target===modal)modal.classList.remove('open')});
 
 form.addEventListener('submit',async e=>{
   e.preventDefault();
-  if(modalSave.disabled)return;
+  if(currentAction==='client_view'||modalSave.disabled)return;
   const fd=new FormData(form);
   modalSave.disabled=true;
   modalSave.textContent='Guardando…';
@@ -203,8 +229,12 @@ async function clients(){
       const name=c.name||`Cliente ${i+1}`;
       const phone=c.phone||'Sin teléfono';
       const initials=name.split(' ').slice(0,2).map(x=>x[0]).join('').toUpperCase();
-      return `<div class="client"><i>${escapeHtml(initials)}</i><div><b>${escapeHtml(name)}</b><span>${escapeHtml(phone)}</span></div><small>Ver ficha →</small></div>`;
+      return `<button type="button" class="client client-open" data-client-index="${i}"><i>${escapeHtml(initials)}</i><div><b>${escapeHtml(name)}</b><span>${escapeHtml(phone)}</span></div><small>Ver ficha →</small></button>`;
     }).join('');
+    list.querySelectorAll('[data-client-index]').forEach(button=>button.addEventListener('click',()=>{
+      const client=rows[Number(button.dataset.clientIndex)];
+      if(client)openClientCard(client);
+    }));
   }catch(e){
     document.getElementById('clientCount').textContent='0';
     list.innerHTML='<p class="empty-note">No pude consultar clientes ahora mismo.</p>';
@@ -238,29 +268,24 @@ async function appointments(){
   const nextTime=document.getElementById('nextTime');
   const nextClient=document.getElementById('nextClient');
   try{
-    const rows=(await apiData(`../backend/api/appointments.php?date=${localDate()}`)).filter(a=>a.status!=='cancelled');
+    const [todayRows,nextRows]=await Promise.all([
+      apiData(`../backend/api/appointments.php?date=${localDate()}`),
+      apiData(`../backend/api/appointments.php?next_from=${encodeURIComponent(localDateTime())}`)
+    ]);
+    const rows=todayRows.filter(a=>a.status!=='cancelled');
     today.textContent=rows.length;
     const pendingCount=rows.filter(a=>a.status!=='completed').length;
     pending.textContent=rows.length?`${pendingCount} por atender`:'Sin citas registradas';
+    homeAgenda.innerHTML=rows.length?rows.map(a=>appointmentHtml(a,true)).join(''):'<p class="empty-note">Aún no hay citas para hoy. Cuando registres una, aparecerá aquí.</p>';
 
-    if(!rows.length){
-      homeAgenda.innerHTML='<p class="empty-note">Aún no hay citas para hoy. Cuando registres una, aparecerá aquí.</p>';
-      nextTime.textContent='—';
-      nextClient.textContent='Sin cita próxima';
-      return;
-    }
-
-    homeAgenda.innerHTML=rows.map(a=>appointmentHtml(a,true)).join('');
-    const now=new Date();
-    const upcoming=rows.find(a=>{
-      if(a.status==='completed')return false;
-      const dt=new Date(String(a.starts_at).replace(' ','T'));
-      return !Number.isNaN(dt.getTime())&&dt>=now;
-    });
+    const upcoming=nextRows[0];
     if(upcoming){
       const raw=String(upcoming.starts_at||'');
-      nextTime.textContent=(raw.split(' ')[1]||raw.split('T')[1]||'').slice(0,5)||'—';
-      nextClient.textContent=upcoming.client_name||'Próxima cita';
+      const time=(raw.split(' ')[1]||raw.split('T')[1]||'').slice(0,5)||'—';
+      const dateKey=appointmentDateKey(upcoming);
+      const when=dateKey===localDate()?'Hoy':new Intl.DateTimeFormat('es-MX',{day:'numeric',month:'short'}).format(dateFromKey(dateKey));
+      nextTime.textContent=time;
+      nextClient.textContent=`${upcoming.client_name||'Cliente'} · ${when}`;
     }else{
       nextTime.textContent='—';
       nextClient.textContent='Sin cita próxima';
@@ -308,7 +333,8 @@ function renderCalendar(){
     if(count>0)classes.push('has-appointments');
     if(key===localDate())classes.push('is-today');
     if(key===selectedDate)classes.push('is-selected');
-    cells.push(`<button type="button" class="${classes.join(' ')}" data-date="${key}" aria-label="${day}: ${count} ${count===1?'cita':'citas'}"><span class="day-number">${day}</span><span class="day-count">${count}</span></button>`);
+    const countIndicator=count>0?`<span class="day-count">${count}</span>`:'';
+    cells.push(`<button type="button" class="${classes.join(' ')}" data-date="${key}" aria-label="${day}${count>0?`: ${count} ${count===1?'cita':'citas'}`:''}"><span class="day-number">${day}</span>${countIndicator}</button>`);
   }
   calendarGrid.innerHTML=cells.join('');
   calendarGrid.querySelectorAll('[data-date]').forEach(button=>button.addEventListener('click',()=>{
