@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<title>Solution SPA · Acceso</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#302626;--cream:#f4efe9;--paper:#fffdf9;--rose:#c58e82;--sage:#718174;--line:#e5ddd5}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:linear-gradient(145deg,#f5f0ea,#eee5de);color:var(--ink);font-family:'DM Sans',sans-serif;display:grid;place-items:center;padding:22px}.card{width:min(460px,100%);background:rgba(255,253,249,.94);border:1px solid rgba(229,221,213,.9);border-radius:28px;padding:34px;box-shadow:0 30px 70px rgba(69,53,49,.12);backdrop-filter:blur(12px)}.brand{display:flex;align-items:center;gap:14px;margin-bottom:42px}.brand b{width:54px;height:54px;border-radius:50%;border:1px solid #746965;display:grid;place-items:center;font:32px 'Instrument Serif',serif;font-weight:400}.brand span{font:34px 'Instrument Serif',serif}.brand small{display:block;font:8px 'DM Sans',sans-serif;letter-spacing:.18em;color:#92847e;margin-top:2px}.eyebrow{font-size:9px;letter-spacing:.18em;color:#8e7d76;font-weight:600}h1{font:48px/1 'Instrument Serif',serif;font-weight:400;margin:8px 0 10px}h1 em{font-weight:400;color:var(--sage)}p{font-size:12px;line-height:1.65;color:#857872;margin:0 0 28px}label{display:grid;gap:7px;font-size:10px;margin:16px 0;color:#756963}input{width:100%;border:1px solid var(--line);background:white;padding:15px 14px;border-radius:12px;color:var(--ink);outline:none}input:focus{border-color:#b99589;box-shadow:0 0 0 3px rgba(197,142,130,.12)}button{width:100%;border:0;border-radius:14px;background:var(--ink);color:white;padding:15px;margin-top:10px;font:600 12px 'DM Sans',sans-serif;cursor:pointer}button:disabled{opacity:.55}.status{min-height:18px;text-align:center;font-size:10px;color:#a05d52;margin:14px 0 0}.foot{text-align:center;font-size:8px;color:#aa9b94;margin-top:28px}@media(max-width:520px){.card{padding:28px 22px;border-radius:24px}h1{font-size:42px}}
+</style>
+</head>
+<body>
+<main class="card">
+  <div class="brand"><b>S</b><span>Solution<small>SPA · GESTIÓN</small></span></div>
+  <span class="eyebrow">ACCESO PRIVADO</span>
+  <h1>Bienvenida de <em>nuevo.</em></h1>
+  <p>Entra para administrar clientes, servicios y citas de Solution SPA.</p>
+  <form id="loginForm">
+    <label>Correo<input type="email" name="email" autocomplete="username" required></label>
+    <label>Contraseña<input type="password" name="password" autocomplete="current-password" required></label>
+    <button id="loginButton" type="submit">Entrar</button>
+    <div class="status" id="status"></div>
+  </form>
+  <div class="foot">Solution SPA · acceso seguro</div>
+</main>
+<script>
+(async()=>{try{const r=await fetch('../backend/api/auth.php?action=me',{cache:'no-store'});if(r.ok)location.replace('./')}catch(e){}})();
+const form=document.getElementById('loginForm'),button=document.getElementById('loginButton'),status=document.getElementById('status');
+form.addEventListener('submit',async e=>{e.preventDefault();button.disabled=true;button.textContent='Entrando…';status.textContent='';const fd=new FormData(form);try{const r=await fetch('../backend/api/auth.php?action=login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:fd.get('email'),password:fd.get('password')})});const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.error||'No se pudo iniciar sesión');location.replace('./')}catch(err){status.textContent=err.message;button.disabled=false;button.textContent='Entrar'}});
+</script>
+</body>
+</html>
