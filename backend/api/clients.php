@@ -28,7 +28,7 @@ if ($method === 'POST') {
     $birthDate = isset($data['birth_date']) ? trim((string)$data['birth_date']) : '';
     $notes = isset($data['notes']) ? trim((string)$data['notes']) : '';
 
-    if (strlen($name) > 240) {
+    if (strlen($name) > 120) {
         respond(['error' => 'El nombre es demasiado largo'], 422);
     }
     if (strlen($phone) > 30) {
