@@ -98,14 +98,33 @@ if ($method === 'DELETE') {
     $data = jsonInput();
     $id = clientId($data['id'] ?? null);
     if ($id === false) respond(['error' => 'Cliente inválido'], 422);
-    $stmt = $pdo->prepare('UPDATE clients SET active=0 WHERE id=:id');
-    $stmt->execute(['id' => $id]);
-    if ($stmt->rowCount() === 0) {
-        $exists = $pdo->prepare('SELECT 1 FROM clients WHERE id=:id LIMIT 1');
-        $exists->execute(['id' => $id]);
-        if (!$exists->fetchColumn()) respond(['error' => 'El cliente no existe'], 404);
+
+    $exists = $pdo->prepare('SELECT 1 FROM clients WHERE id=:id LIMIT 1');
+    $exists->execute(['id' => $id]);
+    if (!$exists->fetchColumn()) respond(['error' => 'El cliente no existe'], 404);
+
+    $nowCancun = (new DateTimeImmutable('now', new DateTimeZone('America/Cancun')))->format('Y-m-d H:i:s');
+
+    try {
+        $pdo->beginTransaction();
+
+        $stmt = $pdo->prepare('UPDATE clients SET active=0 WHERE id=:id');
+        $stmt->execute(['id' => $id]);
+
+        $stmt = $pdo->prepare("UPDATE appointments
+                               SET status='cancelled'
+                               WHERE client_id=:id
+                                 AND starts_at >= :now
+                                 AND status IN ('pending','confirmed')");
+        $stmt->execute(['id' => $id, 'now' => $nowCancun]);
+        $cancelledFuture = $stmt->rowCount();
+
+        $pdo->commit();
+        respond(['ok' => true, 'archived' => true, 'cancelled_future_appointments' => $cancelledFuture]);
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        respond(['error' => 'No se pudo archivar el cliente'], 500);
     }
-    respond(['ok' => true, 'archived' => true]);
 }
 
 respond(['error' => 'Method not allowed'], 405);
