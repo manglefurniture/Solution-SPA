@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/_bootstrap.php';
+requireAuth();
 
 $pdo = db();
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -21,22 +22,14 @@ if ($method === 'POST') {
     $duration = filter_var($data['duration_minutes'] ?? 60, FILTER_VALIDATE_INT, ['options' => ['min_range' => 5, 'max_range' => 1440]]);
     $priceRaw = $data['price'] ?? null;
 
-    if (strlen($name) > 140) {
-        respond(['error' => 'El nombre del servicio es demasiado largo'], 422);
-    }
-    if ($duration === false) {
-        respond(['error' => 'Duración inválida'], 422);
-    }
+    if (strlen($name) > 140) respond(['error' => 'El nombre del servicio es demasiado largo'], 422);
+    if ($duration === false) respond(['error' => 'Duración inválida'], 422);
 
     $price = null;
     if ($priceRaw !== null && $priceRaw !== '') {
-        if (!is_numeric($priceRaw)) {
-            respond(['error' => 'Precio inválido'], 422);
-        }
+        if (!is_numeric($priceRaw)) respond(['error' => 'Precio inválido'], 422);
         $price = (float)$priceRaw;
-        if ($price < 0 || $price > 99999999.99) {
-            respond(['error' => 'Precio fuera de rango'], 422);
-        }
+        if ($price < 0 || $price > 99999999.99) respond(['error' => 'Precio fuera de rango'], 422);
     }
 
     $stmt = $pdo->prepare('INSERT INTO services (name, description, duration_minutes, price, active) VALUES (:name, :description, :duration, :price, :active)');
