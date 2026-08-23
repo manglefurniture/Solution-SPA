@@ -15,12 +15,34 @@ if ($method === 'GET') {
 if ($method === 'POST') {
     $data = jsonInput();
     requireFields($data, ['name']);
-    $duration = max(5, (int)($data['duration_minutes'] ?? 60));
-    $price = isset($data['price']) && $data['price'] !== '' ? (float)$data['price'] : null;
+
+    $name = trim((string)$data['name']);
+    $description = isset($data['description']) ? trim((string)$data['description']) : '';
+    $duration = filter_var($data['duration_minutes'] ?? 60, FILTER_VALIDATE_INT, ['options' => ['min_range' => 5, 'max_range' => 1440]]);
+    $priceRaw = $data['price'] ?? null;
+
+    if (mb_strlen($name) > 140) {
+        respond(['error' => 'El nombre del servicio es demasiado largo'], 422);
+    }
+    if ($duration === false) {
+        respond(['error' => 'Duración inválida'], 422);
+    }
+
+    $price = null;
+    if ($priceRaw !== null && $priceRaw !== '') {
+        if (!is_numeric($priceRaw)) {
+            respond(['error' => 'Precio inválido'], 422);
+        }
+        $price = (float)$priceRaw;
+        if ($price < 0 || $price > 99999999.99) {
+            respond(['error' => 'Precio fuera de rango'], 422);
+        }
+    }
+
     $stmt = $pdo->prepare('INSERT INTO services (name, description, duration_minutes, price, active) VALUES (:name, :description, :duration, :price, :active)');
     $stmt->execute([
-        'name' => trim((string)$data['name']),
-        'description' => $data['description'] ?? null,
+        'name' => $name,
+        'description' => $description !== '' ? $description : null,
         'duration' => $duration,
         'price' => $price,
         'active' => !isset($data['active']) || (bool)$data['active'] ? 1 : 0,
