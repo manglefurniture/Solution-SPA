@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/_bootstrap.php';
+requireAuth();
 
 $pdo = db();
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -28,19 +29,11 @@ if ($method === 'POST') {
     $birthDate = isset($data['birth_date']) ? trim((string)$data['birth_date']) : '';
     $notes = isset($data['notes']) ? trim((string)$data['notes']) : '';
 
-    if (strlen($name) > 120) {
-        respond(['error' => 'El nombre es demasiado largo'], 422);
-    }
-    if (strlen($phone) > 30) {
-        respond(['error' => 'El teléfono es demasiado largo'], 422);
-    }
-    if ($email !== '' && (strlen($email) > 160 || !filter_var($email, FILTER_VALIDATE_EMAIL))) {
-        respond(['error' => 'Correo inválido'], 422);
-    }
+    if (strlen($name) > 120) respond(['error' => 'El nombre es demasiado largo'], 422);
+    if (strlen($phone) > 30) respond(['error' => 'El teléfono es demasiado largo'], 422);
+    if ($email !== '' && (strlen($email) > 160 || !filter_var($email, FILTER_VALIDATE_EMAIL))) respond(['error' => 'Correo inválido'], 422);
     if ($birthDate !== '') {
-        if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $birthDate, $parts) || !checkdate((int)$parts[2], (int)$parts[3], (int)$parts[1])) {
-            respond(['error' => 'Fecha de nacimiento inválida'], 422);
-        }
+        if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $birthDate, $parts) || !checkdate((int)$parts[2], (int)$parts[3], (int)$parts[1])) respond(['error' => 'Fecha de nacimiento inválida'], 422);
     }
 
     $stmt = $pdo->prepare('INSERT INTO clients (name, phone, email, birth_date, notes) VALUES (:name, :phone, :email, :birth_date, :notes)');
