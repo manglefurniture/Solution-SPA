@@ -8,41 +8,18 @@
 <link rel="stylesheet" href="admin.css">
 </head>
 <body>
-<header class="topbar">
-  <div class="logo"><b>S</b><span>Solution<small>SPA · GESTIÓN</small></span></div>
-  <nav class="topnav" aria-label="Menú principal">
-    <button class="active" data-view="home">Inicio</button>
-    <button data-view="agenda">Agenda</button>
-    <button data-view="clients">Clientes</button>
-    <button data-view="services">Servicios</button>
-  </nav>
-  <button class="new topnew" id="newAppointment">＋ Nueva cita</button>
-</header>
-
+<header class="topbar"><div class="logo"><b>S</b><span>Solution<small>SPA · GESTIÓN</small></span></div><nav class="topnav"><button class="active" data-view="home">Inicio</button><button data-view="agenda">Agenda</button><button data-view="clients">Clientes</button><button data-view="services">Servicios</button></nav><button class="new topnew" id="newAppointment">＋ Nueva cita</button></header>
 <main>
+<header class="pagehead"><div><p class="kicker">DOMINGO · 23 AGOSTO</p><h1>Buenos días, <em>Solution.</em></h1></div></header>
 <section id="home" class="view active">
-  <header class="welcome"><div><p class="kicker">HOY · GESTIÓN DEL SPA</p><h1>Buenos días, <em>Solution.</em></h1><p class="welcome-copy">Todo lo importante está aquí. Elige qué quieres hacer.</p></div></header>
-
-  <section class="actions" aria-label="Acciones rápidas">
-    <button class="action-card primary-action" id="quickAppointment"><span class="action-icon">＋</span><div><strong>Agendar una cita</strong><small>Crea una nueva reserva en pocos pasos</small></div><b>Empezar →</b></button>
-    <button class="action-card" data-go="clients"><span class="action-icon">♡</span><div><strong>Buscar un cliente</strong><small>Consulta sus datos e historial</small></div><b>Abrir clientes →</b></button>
-    <button class="action-card" data-go="agenda"><span class="action-icon">◷</span><div><strong>Ver mi agenda</strong><small>Revisa lo programado para hoy</small></div><b>Ver agenda →</b></button>
-  </section>
-
-  <div class="stats"><article><small>CITAS DE HOY</small><strong>6</strong><p><b>●</b> 2 por atender</p></article><article><small>CLIENTES ACTIVOS</small><strong id="clientCount">—</strong><p>Base conectada</p></article><article><small>INGRESOS DEL MES</small><strong>$18.4k</strong><p>↑ 12% vs. mes anterior</p></article><article><small>SESIONES PENDIENTES</small><strong>14</strong><p>En paquetes activos</p></article></div>
-
-  <div class="grid"><section class="panel schedule"><div class="panelhead"><div><span>SIGUIENTE PASO</span><h2>Tu agenda de hoy</h2><p>Estas son las próximas citas. Toca “Ver agenda completa” para administrarlas.</p></div><button data-go="agenda">Ver agenda completa →</button></div><div class="appointment"><time>10:00<small>60 min</small></time><i></i><div><b>Mariana López</b><span>Hidrodermoabrasión · Facial</span></div><mark>Confirmada</mark></div><div class="appointment"><time>12:30<small>45 min</small></time><i></i><div><b>Fernanda Ruiz</b><span>Radiofrecuencia · Facial</span></div><mark>Confirmada</mark></div><div class="appointment muted"><time>16:00<small>60 min</small></time><i></i><div><b>Valeria Santos</b><span>Moldeado corporal</span></div><mark>Pendiente</mark></div></section>
-  <section class="panel focus"><span>¿QUÉ PUEDES HACER AQUÍ?</span><h2>Tu negocio, sin perderte entre pantallas.</h2><p>Agenda citas, encuentra clientes y consulta servicios desde un solo lugar. Todo está pensado para que siempre sepas qué hacer después.</p><div class="orb">S</div></section></div>
+<div class="stats"><article><small>CITAS DE HOY</small><strong>6</strong><p><b>●</b> 2 por atender</p></article><article><small>CLIENTES ACTIVOS</small><strong id="clientCount">—</strong><p>Base conectada</p></article><article><small>INGRESOS DEL MES</small><strong>$18.4k</strong><p>↑ 12% vs. mes anterior</p></article><article><small>SESIONES PENDIENTES</small><strong>14</strong><p>En paquetes activos</p></article></div>
+<div class="grid"><section class="panel schedule"><div class="panelhead"><div><span>HOY</span><h2>Tu agenda</h2></div><button data-go="agenda">Ver agenda →</button></div><div class="appointment"><time>10:00<small>60 min</small></time><i></i><div><b>Mariana López</b><span>Hidrodermoabrasión · Facial</span></div><mark>Confirmada</mark></div><div class="appointment"><time>12:30<small>45 min</small></time><i></i><div><b>Fernanda Ruiz</b><span>Radiofrecuencia · Facial</span></div><mark>Confirmada</mark></div><div class="appointment muted"><time>16:00<small>60 min</small></time><i></i><div><b>Valeria Santos</b><span>Moldeado corporal</span></div><mark>Pendiente</mark></div></section>
+<section class="panel focus"><span>EN FOCO</span><h2>Una experiencia que también se administra bonito.</h2><p>Clientes, citas y tratamientos en un solo lugar, sin perder el toque personal de Solution.</p><div class="orb">S</div></section></div>
 </section>
-
-<section id="agenda" class="view"><div class="title"><span>AGENDA</span><h2>¿Qué tienes programado?</h2><p>Revisa tus citas. Para agregar una nueva, usa el botón “Nueva cita” de arriba.</p></div><div class="panel list"><div class="appointment"><time>10:00</time><i></i><div><b>Mariana López</b><span>Hidrodermoabrasión</span></div><mark>Confirmada</mark></div><div class="appointment"><time>12:30</time><i></i><div><b>Fernanda Ruiz</b><span>Radiofrecuencia</span></div><mark>Confirmada</mark></div><div class="appointment muted"><time>16:00</time><i></i><div><b>Valeria Santos</b><span>Moldeado corporal</span></div><mark>Pendiente</mark></div></div></section>
-
-<section id="clients" class="view"><div class="title"><span>CLIENTES</span><h2>Encuentra a tu clienta</h2><p>Aquí aparecerán todas las personas registradas. Toca una ficha para consultar sus datos e historial.</p></div><div class="panel"><div id="clientsList" class="clients"><p class="loading">Consultando clientes…</p></div></div></section>
-
-<section id="services" class="view"><div class="title"><span>SERVICIOS</span><h2>¿Qué tratamientos ofreces?</h2><p>Consulta tu carta de servicios y sus duraciones.</p></div><div class="servicecards"><article><i>✦</i><b>Hidrodermoabrasión</b><span>Facial · 60 min</span></article><article><i>◌</i><b>Radiofrecuencia</b><span>Facial / corporal</span></article><article><i>◇</i><b>Moldeado corporal</b><span>Corporal · 60 min</span></article><article><i>☼</i><b>Terapia LED</b><span>Facial · 30 min</span></article></div></section>
+<section id="agenda" class="view"><div class="title"><span>ORGANIZACIÓN</span><h2>Agenda</h2><p>Una vista limpia de lo que viene.</p></div><div class="panel list"><div class="appointment"><time>10:00</time><i></i><div><b>Mariana López</b><span>Hidrodermoabrasión</span></div><mark>Confirmada</mark></div><div class="appointment"><time>12:30</time><i></i><div><b>Fernanda Ruiz</b><span>Radiofrecuencia</span></div><mark>Confirmada</mark></div><div class="appointment muted"><time>16:00</time><i></i><div><b>Valeria Santos</b><span>Moldeado corporal</span></div><mark>Pendiente</mark></div></div></section>
+<section id="clients" class="view"><div class="title"><span>RELACIONES</span><h2>Clientes</h2><p>Historia y seguimiento, sin hojas sueltas.</p></div><div class="panel"><div id="clientsList" class="clients"><p class="loading">Consultando clientes…</p></div></div></section>
+<section id="services" class="view"><div class="title"><span>PROTOCOLOS</span><h2>Servicios</h2><p>La carta de tratamientos, siempre a mano.</p></div><div class="servicecards"><article><i>✦</i><b>Hidrodermoabrasión</b><span>Facial · 60 min</span></article><article><i>◌</i><b>Radiofrecuencia</b><span>Facial / corporal</span></article><article><i>◇</i><b>Moldeado corporal</b><span>Corporal · 60 min</span></article><article><i>☼</i><b>Terapia LED</b><span>Facial · 30 min</span></article></div></section>
 </main>
-
-<div class="modal" id="modal"><form><button type="button" class="close">×</button><span>PASO 1 DE 1 · NUEVA RESERVA</span><h2>Agendar una cita</h2><p class="form-help">Completa estos datos y después guarda la cita.</p><label>1. ¿Quién viene?<input placeholder="Nombre del cliente"></label><label>2. ¿Qué tratamiento hará?<select><option>Hidrodermoabrasión</option><option>Radiofrecuencia</option><option>Moldeado corporal</option></select></label><div class="row"><label>3. ¿Qué día?<input type="date"></label><label>4. ¿A qué hora?<input type="time"></label></div><button class="save" type="button">Guardar cita</button><p class="pilot">Vista piloto · conexión de escritura en el siguiente paso.</p></form></div>
+<div class="modal" id="modal"><form><button type="button" class="close">×</button><span>NUEVA RESERVA</span><h2>Crear cita</h2><label>Cliente<input placeholder="Nombre del cliente"></label><label>Tratamiento<select><option>Hidrodermoabrasión</option><option>Radiofrecuencia</option><option>Moldeado corporal</option></select></label><div class="row"><label>Fecha<input type="date"></label><label>Hora<input type="time"></label></div><button class="save" type="button">Guardar cita</button><p class="pilot">Vista piloto · conexión de escritura en el siguiente paso.</p></form></div>
 <script src="admin.js"></script>
-<script>document.getElementById('quickAppointment').addEventListener('click',()=>document.getElementById('modal').classList.add('open'));</script>
 </body></html>
