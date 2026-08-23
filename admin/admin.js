@@ -31,7 +31,7 @@ const actionByView={
 };
 
 function escapeHtml(value=''){
-  return String(value).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[c]));
+  return String(value).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt',"'":'&#039;','"':'&quot;'}[c]));
 }
 
 function localDate(date=new Date()){
@@ -92,10 +92,15 @@ function show(id){
 navButtons.forEach(b=>b.addEventListener('click',()=>show(b.dataset.view)));
 document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.go)));
 
-async function apiData(url){
+async function apiJson(url){
   const r=await fetch(url,{cache:'no-store'});
   const data=await r.json().catch(()=>({}));
   if(!r.ok)throw new Error(data.error||'No se pudo consultar');
+  return data;
+}
+
+async function apiData(url){
+  const data=await apiJson(url);
   return Array.isArray(data)?data:(data.data||[]);
 }
 
@@ -135,7 +140,7 @@ async function openContextModal(){
     modalFields.innerHTML='<p class="loading">Preparando clientes y servicios…</p>';
     try{
       const [clientRows,serviceRows]=await Promise.all([
-        apiData('../backend/api/clients.php'),
+        apiData('../backend/api/clients.php?per_page=200'),
         apiData('../backend/api/services.php')
       ]);
       const activeServices=serviceRows.filter(s=>Number(s.active)!==0);
@@ -213,17 +218,19 @@ form.addEventListener('submit',async e=>{
     setTimeout(()=>modal.classList.remove('open'),750);
   }catch(err){
     modalStatus.textContent=err.message||'No se pudo guardar';
-    modalStatus.className='pilot error';
     modalSave.disabled=false;
     modalSave.textContent='Guardar';
+    modalStatus.className='pilot error';
   }
 });
 
 async function clients(){
   const list=document.getElementById('clientsList');
   try{
-    const rows=await apiData('../backend/api/clients.php');
-    document.getElementById('clientCount').textContent=rows.length;
+    const payload=await apiJson('../backend/api/clients.php?per_page=200');
+    const rows=Array.isArray(payload)?payload:(payload.data||[]);
+    const total=Number(payload?.meta?.total??rows.length);
+    document.getElementById('clientCount').textContent=total;
     if(!rows.length){list.innerHTML='<p class="empty-note">Aún no hay clientes registrados.</p>';return}
     list.innerHTML=rows.slice(0,50).map((c,i)=>{
       const name=c.name||`Cliente ${i+1}`;
@@ -246,8 +253,9 @@ async function services(){
     const rows=await apiData('../backend/api/services.php');
     const activeRows=rows.filter(s=>Number(s.active)!==0);
     document.getElementById('serviceCount').textContent=activeRows.length;
-    if(!activeRows.length){serviceCards.innerHTML='<p class="empty-note">Aún no hay servicios registrados.</p>';return}
-    serviceCards.innerHTML=activeRows.map(s=>`<article><i>✦</i><b>${escapeHtml(s.name)}</b><span>${Number(s.duration_minutes)||60} min${s.price!==null&&s.price!==undefined?` · $${Number(s.price).toLocaleString('es-MX')}`:''}</span></article>`).join('');
+    if(!rows.length){serviceCards.innerHTML='<p class="empty-note">Aún no hay servicios registrados.</p>';return}
+    serviceCards.innerHTML=rows.map(s=>`<button type="button" class="service-card-manage${Number(s.active)===0?' inactive':''}" data-service-id="${Number(s.id)}"><i>✦</i><b>${escapeHtml(s.name)}</b><span>${Number(s.duration_minutes)||60} min${s.price!==null&&s.price!==undefined?` · $${Number(s.price).toLocaleString('es-MX')}`:''}</span><small>${Number(s.active)!==0?'Activo · Toca para editar':'Inactivo · Toca para editar'}</small></button>`).join('');
+    serviceCards.querySelectorAll('[data-service-id]').forEach((el,i)=>el._serviceData=rows[i]);
   }catch(e){
     document.getElementById('serviceCount').textContent='0';
     serviceCards.innerHTML='<p class="empty-note">No pude consultar los servicios ahora mismo.</p>';
@@ -262,6 +270,12 @@ function appointmentHtml(a,includeDuration=true){
   return `<div class="appointment${a.status==='pending'?' muted':''}"><time>${escapeHtml(time)}${includeDuration&&duration?`<small>${duration} min</small>`:''}</time><i></i><div><b>${escapeHtml(a.client_name||'Cliente')}</b><span>${escapeHtml(a.service_name||'Servicio')}</span></div><mark>${status}</mark></div>`;
 }
 
+function upcomingAppointmentHtml(a){
+  const dateKey=appointmentDateKey(a);
+  const when=dateKey===localDate()?'Hoy':new Intl.DateTimeFormat('es-MX',{day:'numeric',month:'short'}).format(dateFromKey(dateKey));
+  return appointmentHtml({...a,service_name:`${a.service_name||'Servicio'} · ${when}`},true);
+}
+
 async function appointments(){
   const today=document.getElementById('todayCount');
   const pending=document.getElementById('todayPending');
@@ -270,13 +284,13 @@ async function appointments(){
   try{
     const [todayRows,nextRows]=await Promise.all([
       apiData(`../backend/api/appointments.php?date=${localDate()}`),
-      apiData(`../backend/api/appointments.php?next_from=${encodeURIComponent(localDateTime())}`)
+      apiData(`../backend/api/appointments.php?next_from=${encodeURIComponent(localDateTime())}&limit=3`)
     ]);
     const rows=todayRows.filter(a=>a.status!=='cancelled');
     today.textContent=rows.length;
     const pendingCount=rows.filter(a=>a.status!=='completed').length;
     pending.textContent=rows.length?`${pendingCount} por atender`:'Sin citas registradas';
-    homeAgenda.innerHTML=rows.length?rows.map(a=>appointmentHtml(a,true)).join(''):'<p class="empty-note">Aún no hay citas para hoy. Cuando registres una, aparecerá aquí.</p>';
+    homeAgenda.innerHTML=nextRows.length?nextRows.map(upcomingAppointmentHtml).join(''):'<p class="empty-note">No hay próximas citas registradas.</p>';
 
     const upcoming=nextRows[0];
     if(upcoming){
@@ -375,7 +389,3 @@ document.getElementById('nextMonth').addEventListener('click',()=>{
 
 setCurrentDate();
 updateAddButton();
-clients();
-services();
-appointments();
-loadCalendar();
