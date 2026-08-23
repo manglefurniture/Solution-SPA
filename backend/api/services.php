@@ -21,7 +21,7 @@ if ($method === 'POST') {
     $duration = filter_var($data['duration_minutes'] ?? 60, FILTER_VALIDATE_INT, ['options' => ['min_range' => 5, 'max_range' => 1440]]);
     $priceRaw = $data['price'] ?? null;
 
-    if (strlen($name) > 280) {
+    if (strlen($name) > 140) {
         respond(['error' => 'El nombre del servicio es demasiado largo'], 422);
     }
     if ($duration === false) {
