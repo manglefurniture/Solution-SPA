@@ -23,7 +23,7 @@ if ($method === 'POST' && $action === 'login') {
 
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) respond(['error' => 'Correo inválido'], 422);
 
-    $stmt = $pdo->prepare('SELECT id, name, email, password_hash, role, active FROM users WHERE email = :email LIMIT 1');
+    $stmt = $pdo->prepare('SELECT id, name, email, password_hash, role, active, client_id FROM users WHERE email = :email LIMIT 1');
     $stmt->execute(['email' => $email]);
     $user = $stmt->fetch();
     if (!$user || (int)$user['active'] !== 1 || !password_verify($password, (string)$user['password_hash'])) {
