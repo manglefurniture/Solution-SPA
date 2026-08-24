@@ -23,7 +23,7 @@
     document.querySelectorAll('[data-view]').forEach(b=>b.classList.remove('active'));
     view.classList.add('active');navButton.classList.add('active');document.getElementById('contextAdd').hidden=true;window.scrollTo({top:0,behavior:'smooth'});load();
   });
-  document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>navButton.classList.remove('active')));
+  document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{navButton.classList.remove('active');view.classList.remove('active')}));
 
   document.getElementById('newUser').addEventListener('click',async()=>{
     let clients=[];try{const d=await json('../backend/api/clients.php?per_page=200');clients=d.data||[]}catch(e){}
