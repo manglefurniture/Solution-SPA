@@ -53,6 +53,42 @@ function requireFields(array $data, array $fields): void
     }
 }
 
+function canonicalRole(string $role): string
+{
+    return $role === 'staff' ? 'operator' : $role;
+}
+
+function rolePermissions(string $role): array
+{
+    $role = canonicalRole($role);
+    $map = [
+        'admin' => ['*'],
+        'operator' => [
+            'clients.view', 'clients.create', 'clients.update',
+            'appointments.view', 'appointments.create', 'appointments.update',
+            'services.view',
+            'web_requests.view', 'web_requests.update',
+        ],
+        'client' => [
+            'profile.view', 'appointments.own.view', 'services.view',
+        ],
+    ];
+    return $map[$role] ?? [];
+}
+
+function userCan(array $user, string $permission): bool
+{
+    $permissions = rolePermissions((string)($user['role'] ?? ''));
+    return in_array('*', $permissions, true) || in_array($permission, $permissions, true);
+}
+
+function requirePermission(string $permission): array
+{
+    $user = requireAuth();
+    if (!userCan($user, $permission)) respond(['error' => 'No tienes permiso para realizar esta acción'], 403);
+    return $user;
+}
+
 function setRememberCookie(string $value, int $expires): void
 {
     setcookie('solution_spa_remember', $value, [
@@ -75,7 +111,8 @@ function establishUserSession(array $user): void
     $_SESSION['user_id'] = (int)$user['id'];
     $_SESSION['user_name'] = (string)$user['name'];
     $_SESSION['user_email'] = (string)$user['email'];
-    $_SESSION['user_role'] = (string)$user['role'];
+    $_SESSION['user_role'] = canonicalRole((string)$user['role']);
+    $_SESSION['client_id'] = isset($user['client_id']) && $user['client_id'] !== null ? (int)$user['client_id'] : null;
 }
 
 function restoreRememberedUser(): ?array
@@ -90,7 +127,7 @@ function restoreRememberedUser(): ?array
 
     try {
         $pdo = db();
-        $stmt = $pdo->prepare("SELECT rt.id AS token_id, rt.validator_hash, rt.expires_at, u.id, u.name, u.email, u.role, u.active
+        $stmt = $pdo->prepare("SELECT rt.id AS token_id, rt.validator_hash, rt.expires_at, u.id, u.name, u.email, u.role, u.active, u.client_id
                                FROM remember_tokens rt JOIN users u ON u.id = rt.user_id
                                WHERE rt.selector = :selector LIMIT 1");
         $stmt->execute(['selector' => $selector]);
@@ -121,11 +158,14 @@ function currentUser(): ?array
 {
     if (empty($_SESSION['user_id'])) restoreRememberedUser();
     if (empty($_SESSION['user_id'])) return null;
+    $role = canonicalRole((string)($_SESSION['user_role'] ?? 'operator'));
     return [
         'id' => (int)$_SESSION['user_id'],
         'name' => (string)($_SESSION['user_name'] ?? ''),
         'email' => (string)($_SESSION['user_email'] ?? ''),
-        'role' => (string)($_SESSION['user_role'] ?? 'staff'),
+        'role' => $role,
+        'client_id' => isset($_SESSION['client_id']) && $_SESSION['client_id'] !== null ? (int)$_SESSION['client_id'] : null,
+        'permissions' => rolePermissions($role),
     ];
 }
 
