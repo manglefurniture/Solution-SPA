@@ -29,6 +29,11 @@ form?.addEventListener('submit', async (event) => {
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || 'No pudimos enviar tu solicitud');
 
+    const title = success?.querySelector('strong');
+    const text = success?.querySelector('p');
+    if (title) title.textContent = 'Solicitud recibida';
+    if (text) text.textContent = 'Tus datos ya quedaron registrados. Solution SPA podrá ver esta solicitud desde su panel de gestión.';
+
     form.hidden = true;
     success.hidden = false;
   } catch (error) {
