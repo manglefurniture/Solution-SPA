@@ -70,7 +70,7 @@ function rolePermissions(string $role): array
             'web_requests.view', 'web_requests.update',
         ],
         'client' => [
-            'profile.view', 'appointments.own.view', 'services.view',
+            'profile.view', 'appointments.own.view', 'appointments.own.create', 'services.view',
         ],
     ];
     return $map[$role] ?? [];
