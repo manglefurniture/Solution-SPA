@@ -3,23 +3,30 @@ const success = document.querySelector('#form-success');
 const reset = document.querySelector('#form-reset');
 const submit = form?.querySelector('button[type="submit"]');
 
-// Cleanup de compatibilidad: versiones anteriores añadían accesos Admin por JS.
-// Dejamos una sola fuente visible por breakpoint y retiramos cualquier nodo legado.
-document.querySelectorAll('.admin-mobile-link, .admin-menu-link').forEach((node) => node.remove());
+function normalizeAdminAccess() {
+  const mobile = window.matchMedia('(max-width: 1080px)').matches;
+  const allAdminLinks = Array.from(document.querySelectorAll('a[href="admin/"], a[href="/admin/"]'));
+  const headerAdmin = document.querySelector('.header-actions .admin-link');
+  const desktopAdmin = document.querySelector('.desktop-nav a[href="admin/"], .desktop-nav a[href="/admin/"]');
 
-if (!document.querySelector('#admin-access-cleanup-style')) {
-  const style = document.createElement('style');
-  style.id = 'admin-access-cleanup-style';
-  style.textContent = `
-    /* Desktop usa el enlace Administración del menú principal. */
-    .header-actions .admin-link { display: none; }
-    /* En tablet/móvil el menú principal se oculta; mostramos solo Admin. */
-    @media (max-width: 1080px) {
-      .header-actions .admin-link { display: inline-flex; }
-    }
-  `;
-  document.head.appendChild(style);
+  // Borra cualquier acceso legado/injectado que no sea uno de los dos declarados en el HTML.
+  allAdminLinks.forEach((link) => {
+    if (link !== headerAdmin && link !== desktopAdmin) link.remove();
+  });
+
+  if (mobile) {
+    // En móvil/tablet solo queda el botón Admin junto a Agendar valoración.
+    if (desktopAdmin) desktopAdmin.style.display = 'none';
+    if (headerAdmin) headerAdmin.style.display = 'inline-flex';
+  } else {
+    // En escritorio solo queda Administración dentro del menú principal.
+    if (desktopAdmin) desktopAdmin.style.display = '';
+    if (headerAdmin) headerAdmin.style.display = 'none';
+  }
 }
+
+normalizeAdminAccess();
+window.addEventListener('resize', normalizeAdminAccess);
 
 form?.addEventListener('submit', async (event) => {
   event.preventDefault();
