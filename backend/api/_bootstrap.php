@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/db.php';
 
+date_default_timezone_set('America/Cancun');
+
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
@@ -56,6 +58,16 @@ function requireFields(array $data, array $fields): void
 function canonicalRole(string $role): string
 {
     return $role === 'staff' ? 'operator' : $role;
+}
+
+function roleLabel(string $role): string
+{
+    return match (canonicalRole($role)) {
+        'admin' => 'Administrador',
+        'operator' => 'Gestor',
+        'client' => 'Cliente',
+        default => 'Usuario',
+    };
 }
 
 function rolePermissions(string $role): array
@@ -164,6 +176,7 @@ function currentUser(): ?array
         'name' => (string)($_SESSION['user_name'] ?? ''),
         'email' => (string)($_SESSION['user_email'] ?? ''),
         'role' => $role,
+        'role_label' => roleLabel($role),
         'client_id' => isset($_SESSION['client_id']) && $_SESSION['client_id'] !== null ? (int)$_SESSION['client_id'] : null,
         'permissions' => rolePermissions($role),
     ];
