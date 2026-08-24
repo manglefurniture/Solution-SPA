@@ -25,7 +25,7 @@ function respond(array $payload,int $status=200):never { http_response_code($sta
 function requireFields(array $data,array $fields):void { foreach($fields as $field)if(!isset($data[$field])||trim((string)$data[$field])==='')respond(['error'=>"Falta el campo: {$field}"],422); }
 function canonicalRole(string $role):string{return $role==='staff'?'operator':$role;}
 function roleLabel(string $role):string{return match(canonicalRole($role)){'admin'=>'Administrador','operator'=>'Gestor','client'=>'Cliente',default=>'Usuario'};}
-function rolePermissions(string $role):array{$role=canonicalRole($role);$map=['admin'=>['*'],'operator'=>['clients.view','clients.create','clients.update','appointments.view','appointments.create','appointments.update','services.view','web_requests.view','web_requests.update'],'client'=>['profile.view','appointments.own.view','appointments.own.create','services.view']];return $map[$role]??[];}
+function rolePermissions(string $role):array{$role=canonicalRole($role);$map=['admin'=>['*'],'operator'=>['clients.view','clients.create','clients.update','appointments.view','appointments.create','appointments.update','services.view','web_requests.view','web_requests.update','payments.view','payments.update'],'client'=>['profile.view','appointments.own.view','appointments.own.create','appointments.own.update','services.view','payments.own.view']];return $map[$role]??[];}
 function userCan(array $user,string $permission):bool{$p=rolePermissions((string)($user['role']??''));return in_array('*',$p,true)||in_array($permission,$p,true);}
 function requirePermission(string $permission):array{$user=requireAuth();if(!userCan($user,$permission))respond(['error'=>'No tienes permiso para realizar esta acción'],403);return $user;}
 
@@ -73,9 +73,6 @@ function requireCsrf(): void
     $expected=(string)($_SESSION['csrf_token']??'');
     if($expected!==''&&$sent!==''&&hash_equals($expected,$sent))return;
 
-    // Los navegadores modernos envían Origin en fetch POST/PATCH/DELETE.
-    // Una petición same-origin ya queda protegida frente a CSRF externo;
-    // el token sigue siendo la vía principal y cubre clientes sin Origin.
     if(sameOriginRequest())return;
 
     respond(['error'=>'La sesión de seguridad expiró. Recarga la página e inténtalo de nuevo.'],419);
@@ -87,8 +84,6 @@ function enforceAuthenticatedMutationCsrf():void
 
     $script=basename((string)($_SERVER['SCRIPT_NAME']??''));
     $action=(string)($_GET['action']??'');
-    // Login/logout deben poder completar siempre su ciclo de sesión.
-    // En particular logout tiene que poder borrar el token "recordarme".
     if($script==='auth.php'&&in_array($action,['login','logout'],true))return;
 
     requireCsrf();
