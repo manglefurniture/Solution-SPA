@@ -3,7 +3,35 @@ const success = document.querySelector('#form-success');
 const reset = document.querySelector('#form-reset');
 const submit = form?.querySelector('button[type="submit"]');
 
+function installHeaderStyles() {
+  if (document.querySelector('#solution-header-enhancements')) return;
+  const style = document.createElement('style');
+  style.id = 'solution-header-enhancements';
+  style.textContent = `
+    .header-actions{align-items:center;display:flex;gap:18px;justify-self:end}
+    .admin-access{align-items:center;border:1px solid rgba(43,35,35,.18);display:none;font-size:9px;gap:5px;letter-spacing:.06em;padding:8px 10px;text-transform:uppercase}
+    .admin-access b{font-weight:600}
+    .desktop-nav [data-admin-link]{opacity:.62}
+    @media(max-width:1080px){
+      .header-actions{display:flex}
+      .admin-access{display:inline-flex}
+    }
+    @media(max-width:760px){
+      .header-actions{gap:10px}
+      .admin-access{padding:7px 8px}
+      .admin-access b{display:none}
+      .header-cta{font-size:10px;gap:7px}
+    }
+    @media(max-width:430px){
+      .header-cta{max-width:118px;line-height:1.15;text-align:right}
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 function enhanceHeaderNavigation() {
+  installHeaderStyles();
+
   const nav = document.querySelector('.desktop-nav');
   const header = document.querySelector('.site-header');
   const cta = document.querySelector('.header-cta');
