@@ -35,8 +35,8 @@ function normalizeService(array $data, array $fallback = []): array
 }
 
 if ($method === 'GET') {
-    requirePermission('services.view');
-    $includeArchived = !isset($_GET['include_archived']) || $_GET['include_archived'] !== '0';
+    $user = requirePermission('services.view');
+    $includeArchived = $user['role'] !== 'client' && (!isset($_GET['include_archived']) || $_GET['include_archived'] !== '0');
     $sql = 'SELECT id, name, description, duration_minutes, price, active FROM services';
     if (!$includeArchived) $sql .= ' WHERE active=1';
     $sql .= ' ORDER BY active DESC, name';
