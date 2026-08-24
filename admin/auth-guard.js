@@ -24,25 +24,29 @@
     window.addEventListener('DOMContentLoaded',()=>{
       document.body.dataset.role=user.role;
       const bar=document.querySelector('.topbar');
-      if(!bar)return;
-      const role=document.createElement('span');
-      role.className='spa-role-badge';
-      role.textContent=user.role==='admin'?'Administrador':'Operario';
-      role.style.cssText='position:absolute;right:76px;top:24px;font:600 9px DM Sans,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#9a8b84';
-      bar.appendChild(role);
-      const logout=document.createElement('button');
-      logout.type='button';
-      logout.className='spa-logout';
-      logout.textContent='Salir';
-      logout.title='Cerrar sesión';
-      logout.setAttribute('aria-label','Cerrar sesión');
-      logout.style.cssText='border:0;background:transparent;color:#746964;font:500 11px DM Sans,sans-serif;cursor:pointer;padding:8px 10px;position:absolute;right:22px;top:18px;z-index:4';
-      logout.addEventListener('click',async()=>{
-        logout.disabled=true;
-        await fetch('../backend/api/auth.php?action=logout',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).catch(()=>{});
-        window.location.replace('login.html');
-      });
-      bar.appendChild(logout);
+      if(bar){
+        const role=document.createElement('span');
+        role.className='spa-role-badge';
+        role.textContent=user.role==='admin'?'Administrador':'Operario';
+        role.style.cssText='position:absolute;right:76px;top:24px;font:600 9px DM Sans,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#9a8b84';
+        bar.appendChild(role);
+        const logout=document.createElement('button');
+        logout.type='button';
+        logout.className='spa-logout';
+        logout.textContent='Salir';
+        logout.title='Cerrar sesión';
+        logout.setAttribute('aria-label','Cerrar sesión');
+        logout.style.cssText='border:0;background:transparent;color:#746964;font:500 11px DM Sans,sans-serif;cursor:pointer;padding:8px 10px;position:absolute;right:22px;top:18px;z-index:4';
+        logout.addEventListener('click',async()=>{
+          logout.disabled=true;
+          await fetch('../backend/api/auth.php?action=logout',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).catch(()=>{});
+          window.location.replace('login.html');
+        });
+        bar.appendChild(logout);
+      }
+      const roleUi=document.createElement('script');
+      roleUi.src='role-ui.js?v=20260823-rbac1';
+      document.body.appendChild(roleUi);
     });
   }catch(e){
     window.location.replace('login.html');
