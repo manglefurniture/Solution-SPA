@@ -53,22 +53,44 @@ function csrfToken(): string
     if(empty($_SESSION['csrf_token'])||!is_string($_SESSION['csrf_token']))$_SESSION['csrf_token']=bin2hex(random_bytes(32));
     return $_SESSION['csrf_token'];
 }
+function sameOriginRequest(): bool
+{
+    $origin=(string)($_SERVER['HTTP_ORIGIN']??'');
+    if($origin==='')return false;
+    $originHost=(string)parse_url($origin,PHP_URL_HOST);
+    $host=preg_replace('/:\d+$/','',(string)($_SERVER['HTTP_HOST']??''));
+    return $originHost!==''&&$host!==''&&strcasecmp($originHost,$host)===0;
+}
 function requireCsrf(): void
 {
     $method=strtoupper((string)($_SERVER['REQUEST_METHOD']??'GET'));
     if(in_array($method,['GET','HEAD','OPTIONS'],true))return;
+
     $origin=(string)($_SERVER['HTTP_ORIGIN']??'');
-    if($origin!==''){
-        $originHost=(string)parse_url($origin,PHP_URL_HOST);$host=preg_replace('/:\d+$/','',(string)($_SERVER['HTTP_HOST']??''));
-        if($originHost===''||strcasecmp($originHost,$host)!==0)respond(['error'=>'Origen de solicitud no permitido'],403);
-    }
-    $sent=(string)($_SERVER['HTTP_X_CSRF_TOKEN']??'');$expected=(string)($_SESSION['csrf_token']??'');
-    if($expected===''||$sent===''||!hash_equals($expected,$sent))respond(['error'=>'La sesión de seguridad expiró. Recarga la página e inténtalo de nuevo.'],419);
+    if($origin!==''&&!sameOriginRequest())respond(['error'=>'Origen de solicitud no permitido'],403);
+
+    $sent=(string)($_SERVER['HTTP_X_CSRF_TOKEN']??'');
+    $expected=(string)($_SESSION['csrf_token']??'');
+    if($expected!==''&&$sent!==''&&hash_equals($expected,$sent))return;
+
+    // Los navegadores modernos envían Origin en fetch POST/PATCH/DELETE.
+    // Una petición same-origin ya queda protegida frente a CSRF externo;
+    // el token sigue siendo la vía principal y cubre clientes sin Origin.
+    if(sameOriginRequest())return;
+
+    respond(['error'=>'La sesión de seguridad expiró. Recarga la página e inténtalo de nuevo.'],419);
 }
 function enforceAuthenticatedMutationCsrf():void
 {
     $method=strtoupper((string)($_SERVER['REQUEST_METHOD']??'GET'));
     if(!in_array($method,['POST','PATCH','PUT','DELETE'],true)||empty($_SESSION['user_id']))return;
+
+    $script=basename((string)($_SERVER['SCRIPT_NAME']??''));
+    $action=(string)($_GET['action']??'');
+    // Login/logout deben poder completar siempre su ciclo de sesión.
+    // En particular logout tiene que poder borrar el token "recordarme".
+    if($script==='auth.php'&&in_array($action,['login','logout'],true))return;
+
     requireCsrf();
 }
 
