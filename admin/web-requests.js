@@ -1,0 +1,49 @@
+(()=>{
+const box=document.getElementById('webRequests');
+const count=document.getElementById('webRequestCount');
+if(!box||!count)return;
+
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+const labels={new:'Nueva',contacted:'Contactada',converted:'Convertida',dismissed:'Descartada'};
+
+async function requestApi(url,options={}){
+  const r=await fetch(url,{cache:'no-store',...options});
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(data.error||'No se pudo completar la operación');
+  return data;
+}
+
+async function setStatus(id,status){
+  await requestApi('../backend/api/web_requests.php',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:Number(id),status})});
+  window.uxToast?.(status==='contacted'?'Solicitud marcada como contactada':status==='converted'?'Solicitud convertida':'Solicitud actualizada');
+  await loadWebRequests();
+}
+
+async function createClientFromRequest(row){
+  const r=await fetch('../backend/api/clients.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:row.name,phone:row.phone,notes:`Solicitud web: ${row.interest}`})});
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(data.error||'No se pudo crear el cliente');
+  await setStatus(row.id,'converted');
+  await window.clients?.();
+  window.uxToast?.('Cliente creado desde la solicitud');
+}
+
+async function loadWebRequests(){
+  try{
+    const payload=await requestApi('../backend/api/web_requests.php');
+    const rows=payload.data||[];
+    const fresh=rows.filter(r=>r.status==='new').length;
+    count.textContent=`${fresh} ${fresh===1?'nueva':'nuevas'}`;
+    if(!rows.length){box.innerHTML='<p class="empty-note">No hay solicitudes de la web todavía.</p>';return}
+    box.innerHTML=rows.slice(0,30).map(r=>`<div class="request-row" data-request-id="${Number(r.id)}"><div><b>${r.status==='new'?'<span class="request-new"></span>':''}${esc(r.name)}</b><small>${esc(r.phone)}</small></div><span>${esc(r.interest)}</span><small>${esc(labels[r.status]||r.status)} · ${esc(String(r.created_at||'').slice(0,16))}</small><div class="request-actions">${r.status==='new'?`<button type="button" data-contacted>Contactada</button><button type="button" class="primary" data-convert>Crear cliente</button>`:''}${r.status==='contacted'?`<button type="button" class="primary" data-convert>Crear cliente</button>`:''}</div></div>`).join('');
+    box.querySelectorAll('[data-request-id]').forEach((el,i)=>{
+      const row=rows[i];
+      el.querySelector('[data-contacted]')?.addEventListener('click',()=>setStatus(row.id,'contacted').catch(e=>window.uxToast?.(e.message,'error')));
+      el.querySelector('[data-convert]')?.addEventListener('click',()=>createClientFromRequest(row).catch(e=>window.uxToast?.(e.message,'error')));
+    });
+  }catch(e){box.innerHTML='<p class="empty-note">No pude consultar las solicitudes de la web.</p>';count.textContent='—'}
+}
+
+window.loadWebRequests=loadWebRequests;
+loadWebRequests();
+})();
