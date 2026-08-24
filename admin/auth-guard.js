@@ -47,6 +47,11 @@
       const roleUi=document.createElement('script');
       roleUi.src='role-ui.js?v=20260823-rbac1';
       document.body.appendChild(roleUi);
+      if(user.role==='admin'){
+        const usersUi=document.createElement('script');
+        usersUi.src='users-ui.js?v=20260823-rbac1';
+        document.body.appendChild(usersUi);
+      }
     });
   }catch(e){
     window.location.replace('login.html');
