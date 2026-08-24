@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<title>Solution SPA · Mi espacio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#302626;--paper:#fffdf9;--bg:#f3ede7;--rose:#c58e82;--sage:#718174;--line:#e6ddd6;--muted:#857872}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:'DM Sans',sans-serif}.top{height:78px;background:rgba(255,253,249,.93);border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;padding:0 clamp(18px,5vw,64px);position:sticky;top:0;z-index:5;backdrop-filter:blur(12px)}.brand{display:flex;align-items:center;gap:11px}.brand b{width:40px;height:40px;border:1px solid #746965;border-radius:50%;display:grid;place-items:center;font:25px 'Instrument Serif',serif}.brand span{font:25px 'Instrument Serif',serif}.brand small{display:block;font:7px 'DM Sans',sans-serif;letter-spacing:.16em;color:#92847e}.top button{border:0;background:transparent;color:#746965;font:600 10px 'DM Sans',sans-serif;cursor:pointer}.shell{width:min(1040px,calc(100% - 34px));margin:54px auto 80px}.eyebrow{font-size:9px;letter-spacing:.18em;color:#8e7d76;font-weight:600;text-transform:uppercase}h1{font:clamp(42px,7vw,72px)/.95 'Instrument Serif',serif;font-weight:400;margin:8px 0 10px}h1 em{font-weight:400;color:var(--sage)}.intro{color:var(--muted);font-size:12px;line-height:1.7;max-width:620px}.grid{display:grid;grid-template-columns:1.2fr .8fr;gap:18px;margin-top:36px}.card{background:var(--paper);border:1px solid var(--line);border-radius:22px;padding:24px;box-shadow:0 18px 50px rgba(72,52,46,.06)}.card>small{font-size:8px;letter-spacing:.16em;color:#9b8a83}.card h2{font:32px 'Instrument Serif',serif;font-weight:400;margin:8px 0 18px}.next{padding:22px;background:#f8f1ec;border:1px solid #eadfd7;border-radius:18px}.next strong{font:28px 'Instrument Serif',serif;font-weight:400;display:block}.next span{display:block;font-size:11px;color:var(--muted);margin-top:5px}.status{display:inline-flex;margin-top:14px;padding:7px 10px;border-radius:999px;background:#e8efe9;color:#586a5b;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}.details{display:grid;gap:13px}.detail{padding-bottom:12px;border-bottom:1px solid var(--line)}.detail:last-child{border:0}.detail small{display:block;font-size:8px;letter-spacing:.13em;color:#998a83;margin-bottom:4px}.detail b{font-size:12px;font-weight:500}.history{margin-top:18px}.row{display:grid;grid-template-columns:100px 1fr auto;gap:12px;align-items:center;padding:13px 0;border-top:1px solid var(--line)}.row time{font-size:10px}.row b{display:block;font-size:11px}.row span{font-size:9px;color:var(--muted)}.row mark{background:transparent;font-size:8px;color:#806f68}.empty{font-size:11px;color:var(--muted);padding:12px 0}.error{color:#a55d52}.loading{opacity:.65}@media(max-width:760px){.shell{margin-top:34px}.grid{grid-template-columns:1fr}.row{grid-template-columns:82px 1fr}.row mark{grid-column:2}}
+</style>
+</head>
+<body>
+<header class="top"><div class="brand"><b>S</b><span>Solution<small>SPA · MI ESPACIO</small></span></div><button id="logout">Cerrar sesión</button></header>
+<main class="shell">
+  <span class="eyebrow">Tu espacio personal</span>
+  <h1>Hola, <em id="firstName">bienvenida.</em></h1>
+  <p class="intro">Aquí puedes consultar tus datos, tu próxima cita y el historial básico de tus visitas a Solution SPA.</p>
+  <div class="grid">
+    <section class="card"><small>PRÓXIMA CITA</small><h2>Tu siguiente visita</h2><div id="nextAppointment" class="loading">Consultando…</div><div class="history"><small>HISTORIAL</small><div id="history"><p class="empty">Consultando tus citas…</p></div></div></section>
+    <section class="card"><small>TUS DATOS</small><h2>Tu ficha</h2><div id="profile" class="details loading">Consultando…</div></section>
+  </div>
+</main>
+<script>
+const statusName=s=>({pending:'Pendiente',confirmed:'Confirmada',completed:'Realizada',cancelled:'Cancelada'}[s]||s);
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+function fmtDate(v){const d=new Date(String(v).replace(' ','T'));return new Intl.DateTimeFormat('es-MX',{weekday:'long',day:'numeric',month:'long',hour:'numeric',minute:'2-digit'}).format(d)}
+async function api(url){const r=await fetch(url,{cache:'no-store'});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'No se pudo consultar');return d.data||[]}
+(async()=>{
+  try{
+    const r=await fetch('../backend/api/auth.php?action=me',{cache:'no-store'});const auth=await r.json().catch(()=>({}));
+    if(!r.ok){location.replace('../admin/login.html');return}
+    if(auth.user?.role!=='client'){location.replace('../admin/');return}
+    document.getElementById('firstName').textContent=(auth.user.name||'bienvenida').split(' ')[0]+'.';
+    const [clients,appointments]=await Promise.all([api('../backend/api/clients.php'),api('../backend/api/appointments.php')]);
+    const c=clients[0];
+    document.getElementById('profile').classList.remove('loading');
+    document.getElementById('profile').innerHTML=c?`<div class="detail"><small>NOMBRE</small><b>${esc(c.name)}</b></div><div class="detail"><small>WHATSAPP</small><b>${esc(c.phone||'No registrado')}</b></div><div class="detail"><small>CORREO</small><b>${esc(c.email||'No registrado')}</b></div><div class="detail"><small>NACIMIENTO</small><b>${esc(c.birth_date||'No registrado')}</b></div>`:'<p class="empty">No encontramos tu ficha.</p>';
+    const now=new Date();const active=appointments.filter(a=>['pending','confirmed'].includes(a.status)&&new Date(String(a.starts_at).replace(' ','T'))>=now).sort((a,b)=>String(a.starts_at).localeCompare(String(b.starts_at)));
+    const next=active[0];const nextBox=document.getElementById('nextAppointment');nextBox.classList.remove('loading');nextBox.innerHTML=next?`<div class="next"><strong>${esc(next.service_name)}</strong><span>${esc(fmtDate(next.starts_at))}</span><i class="status">${esc(statusName(next.status))}</i></div>`:'<p class="empty">No tienes una cita próxima.</p>';
+    document.getElementById('history').innerHTML=appointments.length?appointments.slice(0,12).map(a=>`<div class="row"><time>${esc(String(a.starts_at).slice(0,10))}</time><div><b>${esc(a.service_name)}</b><span>${esc(String(a.starts_at).slice(11,16))}</span></div><mark>${esc(statusName(a.status))}</mark></div>`).join(''):'<p class="empty">Aún no tienes citas registradas.</p>';
+  }catch(e){document.getElementById('nextAppointment').innerHTML=`<p class="empty error">${esc(e.message)}</p>`;document.getElementById('profile').innerHTML='<p class="empty error">No pudimos cargar tu ficha.</p>'}
+})();
+document.getElementById('logout').addEventListener('click',async()=>{await fetch('../backend/api/auth.php?action=logout',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).catch(()=>{});location.replace('../admin/login.html')});
+</script>
+</body>
+</html>
