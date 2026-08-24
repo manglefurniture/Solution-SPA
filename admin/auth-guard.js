@@ -13,7 +13,7 @@
       const roleUi=document.createElement('script');roleUi.src='role-ui.js?v=20260824-rbac3';document.body.appendChild(roleUi);
       if(user.role==='admin'){const usersUi=document.createElement('script');usersUi.src='users-ui.js?v=20260824-rbac3';document.body.appendChild(usersUi);}
       const product=document.createElement('script');product.src='productization.js?v=20260824-2';document.body.appendChild(product);
-      const payments=document.createElement('script');payments.src='payments-ui.js?v=20260824-1';document.body.appendChild(payments);
+      const payments=document.createElement('script');payments.src='payments-ui.js?v=20260824-integrated2';document.body.appendChild(payments);
     });
   }catch(e){window.location.replace('login.html');}
 })();
