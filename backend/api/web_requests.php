@@ -3,17 +3,18 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/_bootstrap.php';
-requireAuth();
 
 $pdo = db();
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
 if ($method === 'GET') {
+    requirePermission('web_requests.view');
     $stmt = $pdo->query("SELECT id,name,phone,interest,status,source,created_at,updated_at FROM web_requests ORDER BY FIELD(status,'new','contacted','converted','dismissed'), created_at DESC LIMIT 100");
     respond(['data' => $stmt->fetchAll()]);
 }
 
 if ($method === 'PATCH') {
+    requirePermission('web_requests.update');
     $data = jsonInput();
     $id = filter_var($data['id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
     $status = (string)($data['status'] ?? '');
