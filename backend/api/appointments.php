@@ -42,7 +42,7 @@ function ensureNoExactConflict(PDO $pdo,string $startsAt,?int $excludeId=null):v
 {
     $sql="SELECT id FROM appointments WHERE starts_at=:starts_at AND status IN ('pending','confirmed')";$params=['starts_at'=>$startsAt];
     if($excludeId!==null){$sql.=' AND id<>:id';$params['id']=$excludeId;}$sql.=' LIMIT 1';
-    $stmt=$pdo->prepare($sql);$stmt->execute($params);if($stmt->fetchColumn())respond(['error'=>'Ya existe una cita activa exactamente a esa hora'],409);
+    $stmt=$pdo->prepare($sql);$stmt->execute($params);if($stmt->fetchColumn())respond(['error'=>'Ese horario ya tiene una cita. Elige otra hora.'],409);
 }
 
 $select="SELECT a.id,a.starts_at,a.status,a.notes,c.id AS client_id,c.name AS client_name,c.phone,c.active AS client_active,s.id AS service_id,s.name AS service_name,s.duration_minutes,s.active AS service_active FROM appointments a JOIN clients c ON c.id=a.client_id JOIN services s ON s.id=a.service_id";
@@ -70,8 +70,33 @@ if($method==='GET'){
 }
 
 if($method==='POST'){
-    requirePermission('appointments.create');
-    $data=jsonInput();requireFields($data,['client_id','service_id','starts_at']);$clientId=validEntityId($data['client_id']);$serviceId=validEntityId($data['service_id']);if($clientId===false||$serviceId===false)respond(['error'=>'Cliente o servicio inválido'],422);$startsAt=strictDateTime(trim((string)$data['starts_at']));if(!$startsAt)respond(['error'=>'Fecha u hora inválida'],422);$status=(string)($data['status']??'pending');$allowed=['pending','confirmed','completed','cancelled'];if(!in_array($status,$allowed,true))respond(['error'=>'Estado inválido'],422);ensureClient($pdo,$clientId,false);ensureService($pdo,$serviceId,false);if(in_array($status,['pending','confirmed'],true))ensureNoExactConflict($pdo,$startsAt->format('Y-m-d H:i:s'));$notes=isset($data['notes'])?trim((string)$data['notes']):null;$stmt=$pdo->prepare('INSERT INTO appointments (client_id,service_id,starts_at,status,notes) VALUES (:client_id,:service_id,:starts_at,:status,:notes)');$stmt->execute(['client_id'=>$clientId,'service_id'=>$serviceId,'starts_at'=>$startsAt->format('Y-m-d H:i:s'),'status'=>$status,'notes'=>$notes!==''?$notes:null]);respond(['id'=>(int)$pdo->lastInsertId()],201);
+    $data=jsonInput();
+    $isClient=$user['role']==='client';
+    if($isClient){
+        if(!userCan($user,'appointments.own.create'))respond(['error'=>'No tienes permiso para reservar'],403);
+        requireFields($data,['service_id','starts_at']);
+        $clientId=(int)($user['client_id']??0);
+        if($clientId<1)respond(['error'=>'Tu cuenta todavía no está vinculada a una ficha de cliente'],403);
+        $status='pending';
+        $notes=null;
+    }else{
+        requirePermission('appointments.create');
+        requireFields($data,['client_id','service_id','starts_at']);
+        $clientId=validEntityId($data['client_id']);
+        if($clientId===false)respond(['error'=>'Cliente inválido'],422);
+        $status=(string)($data['status']??'pending');
+        $allowed=['pending','confirmed','completed','cancelled'];
+        if(!in_array($status,$allowed,true))respond(['error'=>'Estado inválido'],422);
+        $notes=isset($data['notes'])?trim((string)$data['notes']):null;
+    }
+    $serviceId=validEntityId($data['service_id']??null);if($serviceId===false)respond(['error'=>'Servicio inválido'],422);
+    $startsAt=strictDateTime(trim((string)($data['starts_at']??'')));if(!$startsAt)respond(['error'=>'Fecha u hora inválida'],422);
+    if($isClient && $startsAt <= new DateTimeImmutable('now'))respond(['error'=>'La cita debe ser en una fecha futura'],422);
+    ensureClient($pdo,$clientId,false);ensureService($pdo,$serviceId,false);
+    if(in_array($status,['pending','confirmed'],true))ensureNoExactConflict($pdo,$startsAt->format('Y-m-d H:i:s'));
+    $stmt=$pdo->prepare('INSERT INTO appointments (client_id,service_id,starts_at,status,notes) VALUES (:client_id,:service_id,:starts_at,:status,:notes)');
+    $stmt->execute(['client_id'=>$clientId,'service_id'=>$serviceId,'starts_at'=>$startsAt->format('Y-m-d H:i:s'),'status'=>$status,'notes'=>$notes!==''?$notes:null]);
+    respond(['id'=>(int)$pdo->lastInsertId(),'status'=>$status],201);
 }
 
 if($method==='PATCH'){
