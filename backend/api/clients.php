@@ -3,10 +3,10 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/_bootstrap.php';
-requireAuth();
 
 $pdo = db();
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+$user = requireAuth();
 
 function clientId(mixed $value): int|false
 {
@@ -41,6 +41,17 @@ function normalizeClient(array $data, array $fallback = []): array
 }
 
 if ($method === 'GET') {
+    if ($user['role'] === 'client') {
+        $ownId = (int)($user['client_id'] ?? 0);
+        if ($ownId < 1) respond(['error' => 'Tu cuenta todavía no está vinculada a una ficha de cliente'], 403);
+        $stmt = $pdo->prepare('SELECT id, name, phone, email, birth_date, active, created_at FROM clients WHERE id=:id LIMIT 1');
+        $stmt->execute(['id' => $ownId]);
+        $client = $stmt->fetch();
+        if (!$client) respond(['error' => 'La ficha de cliente no existe'], 404);
+        respond(['data' => [$client], 'meta' => ['total' => 1, 'page' => 1, 'per_page' => 1, 'pages' => 1]]);
+    }
+
+    requirePermission('clients.view');
     $q = trim((string)($_GET['q'] ?? ''));
     $includeArchived = isset($_GET['include_archived']) && $_GET['include_archived'] === '1';
     $countOnly = isset($_GET['count_only']) && $_GET['count_only'] === '1';
@@ -69,6 +80,7 @@ if ($method === 'GET') {
 }
 
 if ($method === 'POST') {
+    requirePermission('clients.create');
     $data = jsonInput();
     requireFields($data, ['name', 'phone']);
     $client = normalizeClient($data);
@@ -78,6 +90,7 @@ if ($method === 'POST') {
 }
 
 if ($method === 'PATCH') {
+    requirePermission('clients.update');
     $data = jsonInput();
     $id = clientId($data['id'] ?? null);
     if ($id === false) respond(['error' => 'Cliente inválido'], 422);
@@ -87,6 +100,10 @@ if ($method === 'PATCH') {
     $current = $stmt->fetch();
     if (!$current) respond(['error' => 'El cliente no existe'], 404);
 
+    if ($user['role'] === 'operator' && array_key_exists('active', $data) && (int)(bool)$data['active'] !== (int)$current['active']) {
+        respond(['error' => 'Los operarios no pueden archivar ni reactivar clientes'], 403);
+    }
+
     $client = normalizeClient($data, $current);
     $client['id'] = $id;
     $stmt = $pdo->prepare('UPDATE clients SET name=:name, phone=:phone, email=:email, birth_date=:birth_date, notes=:notes, active=:active WHERE id=:id');
@@ -95,6 +112,7 @@ if ($method === 'PATCH') {
 }
 
 if ($method === 'DELETE') {
+    requirePermission('clients.delete');
     $data = jsonInput();
     $id = clientId($data['id'] ?? null);
     if ($id === false) respond(['error' => 'Cliente inválido'], 422);
@@ -107,18 +125,11 @@ if ($method === 'DELETE') {
 
     try {
         $pdo->beginTransaction();
-
         $stmt = $pdo->prepare('UPDATE clients SET active=0 WHERE id=:id');
         $stmt->execute(['id' => $id]);
-
-        $stmt = $pdo->prepare("UPDATE appointments
-                               SET status='cancelled'
-                               WHERE client_id=:id
-                                 AND starts_at >= :now
-                                 AND status IN ('pending','confirmed')");
+        $stmt = $pdo->prepare("UPDATE appointments SET status='cancelled' WHERE client_id=:id AND starts_at >= :now AND status IN ('pending','confirmed')");
         $stmt->execute(['id' => $id, 'now' => $nowCancun]);
         $cancelledFuture = $stmt->rowCount();
-
         $pdo->commit();
         respond(['ok' => true, 'archived' => true, 'cancelled_future_appointments' => $cancelledFuture]);
     } catch (Throwable $e) {
