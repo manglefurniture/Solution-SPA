@@ -15,6 +15,7 @@ if ($method === 'GET' && $action === 'me') {
 }
 
 if ($method === 'POST' && $action === 'login') {
+    enforceRateLimit('login', 10, 900);
     $data = jsonInput();
     requireFields($data, ['email', 'password']);
     $email = strtolower(trim((string)$data['email']));
