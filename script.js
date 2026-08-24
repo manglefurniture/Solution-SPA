@@ -3,6 +3,24 @@ const success = document.querySelector('#form-success');
 const reset = document.querySelector('#form-reset');
 const submit = form?.querySelector('button[type="submit"]');
 
+// Cleanup de compatibilidad: versiones anteriores añadían accesos Admin por JS.
+// Dejamos una sola fuente visible por breakpoint y retiramos cualquier nodo legado.
+document.querySelectorAll('.admin-mobile-link, .admin-menu-link').forEach((node) => node.remove());
+
+if (!document.querySelector('#admin-access-cleanup-style')) {
+  const style = document.createElement('style');
+  style.id = 'admin-access-cleanup-style';
+  style.textContent = `
+    /* Desktop usa el enlace Administración del menú principal. */
+    .header-actions .admin-link { display: none; }
+    /* En tablet/móvil el menú principal se oculta; mostramos solo Admin. */
+    @media (max-width: 1080px) {
+      .header-actions .admin-link { display: inline-flex; }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
 form?.addEventListener('submit', async (event) => {
   event.preventDefault();
   if (!form.reportValidity()) return;
