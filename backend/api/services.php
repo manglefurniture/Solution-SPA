@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/_bootstrap.php';
-requireAuth();
 
 $pdo = db();
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -36,6 +35,7 @@ function normalizeService(array $data, array $fallback = []): array
 }
 
 if ($method === 'GET') {
+    requirePermission('services.view');
     $includeArchived = !isset($_GET['include_archived']) || $_GET['include_archived'] !== '0';
     $sql = 'SELECT id, name, description, duration_minutes, price, active FROM services';
     if (!$includeArchived) $sql .= ' WHERE active=1';
@@ -45,12 +45,14 @@ if ($method === 'GET') {
 }
 
 if ($method === 'POST') {
+    requirePermission('services.create');
     $data = jsonInput();requireFields($data, ['name']);$service = normalizeService($data);
     $stmt = $pdo->prepare('INSERT INTO services (name, description, duration_minutes, price, active) VALUES (:name, :description, :duration, :price, :active)');$stmt->execute($service);
     respond(['id' => (int)$pdo->lastInsertId()], 201);
 }
 
 if ($method === 'PATCH') {
+    requirePermission('services.update');
     $data = jsonInput();$id = serviceId($data['id'] ?? null);if ($id === false) respond(['error' => 'Servicio inválido'], 422);
     $stmt = $pdo->prepare('SELECT name, description, duration_minutes, price, active FROM services WHERE id=:id LIMIT 1');$stmt->execute(['id'=>$id]);$current=$stmt->fetch();if(!$current)respond(['error'=>'El servicio no existe'],404);
     $service=normalizeService($data,$current);$service['id']=$id;
@@ -59,6 +61,7 @@ if ($method === 'PATCH') {
 }
 
 if ($method === 'DELETE') {
+    requirePermission('services.delete');
     $data=jsonInput();$id=serviceId($data['id']??null);if($id===false)respond(['error'=>'Servicio inválido'],422);
     $stmt=$pdo->prepare('UPDATE services SET active=0 WHERE id=:id');$stmt->execute(['id'=>$id]);
     if($stmt->rowCount()===0){$exists=$pdo->prepare('SELECT 1 FROM services WHERE id=:id LIMIT 1');$exists->execute(['id'=>$id]);if(!$exists->fetchColumn())respond(['error'=>'El servicio no existe'],404);}
