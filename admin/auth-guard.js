@@ -9,10 +9,27 @@
       return;
     }
     const data=JSON.parse(xhr.responseText||'{}');
-    window.solutionUser=data.user||null;
+    const user=data.user||null;
+    if(!user){window.location.replace('login.html');return}
+    if(user.role==='client'){
+      window.location.replace('../client/');
+      return;
+    }
+    if(!['admin','operator'].includes(user.role)){
+      window.location.replace('login.html');
+      return;
+    }
+    window.solutionUser=user;
+    window.solutionCan=(permission)=>Array.isArray(user.permissions)&&(user.permissions.includes('*')||user.permissions.includes(permission));
     window.addEventListener('DOMContentLoaded',()=>{
+      document.body.dataset.role=user.role;
       const bar=document.querySelector('.topbar');
       if(!bar)return;
+      const role=document.createElement('span');
+      role.className='spa-role-badge';
+      role.textContent=user.role==='admin'?'Administrador':'Operario';
+      role.style.cssText='position:absolute;right:76px;top:24px;font:600 9px DM Sans,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#9a8b84';
+      bar.appendChild(role);
       const logout=document.createElement('button');
       logout.type='button';
       logout.className='spa-logout';
