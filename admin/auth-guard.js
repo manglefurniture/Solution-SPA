@@ -23,11 +23,10 @@
     window.solutionCan=(permission)=>Array.isArray(user.permissions)&&(user.permissions.includes('*')||user.permissions.includes(permission));
     window.addEventListener('DOMContentLoaded',()=>{
       document.body.dataset.role=user.role;
-      const bar=document.querySelector('.topbar');
-      if(bar){
+      const slot=document.getElementById('sessionSlot');
+      if(slot){
         const session=document.createElement('div');
         session.className='spa-session-actions';
-        session.style.cssText='display:flex;align-items:center;gap:8px;white-space:nowrap';
 
         const role=document.createElement('span');
         role.className='spa-role-badge';
@@ -48,7 +47,7 @@
         });
 
         session.append(role,logout);
-        bar.appendChild(session);
+        slot.replaceChildren(session);
       }
       const roleUi=document.createElement('script');
       roleUi.src='role-ui.js?v=20260823-rbac1';
