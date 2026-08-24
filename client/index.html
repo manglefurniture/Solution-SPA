@@ -46,8 +46,9 @@ const serviceImages=[
 ];
 function fmtDate(v){const d=new Date(String(v).replace(' ','T'));return new Intl.DateTimeFormat('es-MX',{weekday:'long',day:'numeric',month:'long',hour:'numeric',minute:'2-digit'}).format(d)}
 function localDate(d=new Date()){const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${day}`}
+let csrfToken='';
 async function api(url){const r=await fetch(url,{cache:'no-store'});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'No se pudo consultar');return d.data||[]}
-async function post(url,payload){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'No se pudo guardar');return d}
+async function post(url,payload){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken},body:JSON.stringify(payload)});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'No se pudo guardar');return d}
 let currentAppointments=[];
 let activeServices=[];
 function renderAppointments(appointments){
@@ -69,6 +70,7 @@ async function loadPortal(){
   const r=await fetch('../backend/api/auth.php?action=me',{cache:'no-store'});const auth=await r.json().catch(()=>({}));
   if(!r.ok){location.replace('../admin/login.html');return}
   if(auth.user?.role!=='client'){location.replace('../admin/');return}
+  csrfToken=auth.user.csrf_token||'';
   document.getElementById('firstName').textContent=(auth.user.name||'bienvenida').split(' ')[0]+'.';
   const [clients,appointments,services]=await Promise.all([api('../backend/api/clients.php'),api('../backend/api/appointments.php'),api('../backend/api/services.php?include_archived=0')]);
   const c=clients[0];document.getElementById('profile').classList.remove('loading');document.getElementById('profile').innerHTML=c?`<div class="detail"><small>NOMBRE</small><b>${esc(c.name)}</b></div><div class="detail"><small>WHATSAPP</small><b>${esc(c.phone||'No registrado')}</b></div><div class="detail"><small>CORREO</small><b>${esc(c.email||'No registrado')}</b></div><div class="detail"><small>NACIMIENTO</small><b>${esc(c.birth_date||'No registrado')}</b></div>`:'<p class="empty">No encontramos tu ficha.</p>';
@@ -77,7 +79,7 @@ async function loadPortal(){
 const dateInput=document.getElementById('bookingDate');dateInput.min=localDate();dateInput.value=localDate(new Date(Date.now()+86400000));
 document.getElementById('bookingForm').addEventListener('submit',async e=>{e.preventDefault();const form=e.currentTarget,fd=new FormData(form),button=document.getElementById('bookButton'),status=document.getElementById('bookingStatus');button.disabled=true;button.textContent='Enviando…';status.textContent='';status.className='booking-status';try{await post('../backend/api/appointments.php',{service_id:Number(fd.get('service_id')),starts_at:`${fd.get('date')} ${fd.get('time')}:00`});status.textContent='Solicitud enviada ✓ El SPA podrá confirmarla desde su agenda.';status.className='booking-status success';const appointments=await api('../backend/api/appointments.php');renderAppointments(appointments);form.elements.time.value=''}catch(err){status.textContent=err.message;status.className='booking-status error'}finally{button.disabled=false;button.textContent='Solicitar cita'}});
 loadPortal().catch(e=>{document.getElementById('nextAppointment').innerHTML=`<p class="empty error">${esc(e.message)}</p>`;document.getElementById('profile').innerHTML='<p class="empty error">No pudimos cargar tu ficha.</p>'});
-document.getElementById('logout').addEventListener('click',async()=>{await fetch('../backend/api/auth.php?action=logout',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).catch(()=>{});location.replace('../admin/login.html')});
+document.getElementById('logout').addEventListener('click',async()=>{await fetch('../backend/api/auth.php?action=logout',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrfToken},body:'{}'}).catch(()=>{});location.replace('../admin/login.html')});
 </script>
 </body>
 </html>
