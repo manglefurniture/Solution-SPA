@@ -14,7 +14,8 @@ function safeInit(){
     const status=document.getElementById('paymentStatus');
     const refresh=document.getElementById('refreshPayments');
     const nav=document.querySelector('[data-view="payments"]');
-    if(!section||!form||!client||!appt||!list||!status||!nav)return;
+    const submit=form?.querySelector('button[type="submit"]');
+    if(!section||!form||!client||!appt||!list||!status||!nav||!submit)return;
 
     const esc=window.spaEscape||(v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c])));
     const method=v=>({cash:'Efectivo',card:'Tarjeta',transfer:'Transferencia',other:'Otro'}[v]||v);
@@ -33,17 +34,28 @@ function safeInit(){
       if(!r.ok)throw new Error(d.error||'No se pudo registrar el pago');
       return d;
     }
+    function setFormState(){
+      const enabled=Boolean(client.value&&appt.value);
+      submit.disabled=!enabled;
+      submit.title=enabled?'Registrar pago':'Primero selecciona una cita realizada';
+    }
     async function loadClients(){
       const rows=await getData('../backend/api/clients.php?per_page=200');
       client.innerHTML='<option value="">Selecciona cliente</option>'+rows.map(c=>`<option value="${Number(c.id)}">${esc(c.name)}</option>`).join('');
+      appt.innerHTML='<option value="">Selecciona primero un cliente</option>';
+      setFormState();
     }
     async function loadAppointments(){
-      appt.innerHTML='<option value="">Sin asociar a una cita</option>';
-      if(!client.value)return;
+      appt.innerHTML='<option value="">Consultando citas realizadas…</option>';
+      if(!client.value){appt.innerHTML='<option value="">Selecciona primero un cliente</option>';setFormState();return;}
       try{
         const rows=await getData(`../backend/api/appointments.php?client_id=${Number(client.value)}`);
-        appt.innerHTML+=rows.slice(0,50).map(a=>`<option value="${Number(a.id)}">${esc(String(a.starts_at).slice(0,16))} · ${esc(a.service_name||'Servicio')}</option>`).join('');
-      }catch(e){}
+        const completed=rows.filter(a=>a.status==='completed');
+        appt.innerHTML=completed.length?'<option value="">Selecciona una cita realizada</option>'+completed.slice(0,50).map(a=>`<option value="${Number(a.id)}">${esc(String(a.starts_at).slice(0,16))} · ${esc(a.service_name||'Servicio')}</option>`).join(''):'<option value="">Este cliente no tiene citas realizadas</option>';
+        if(!completed.length)status.textContent='Para registrar un pago, primero marca una cita como realizada.';
+        else status.textContent='';
+      }catch(e){appt.innerHTML='<option value="">No pude cargar las citas</option>';status.textContent=e.message||'No pude cargar las citas';}
+      setFormState();
     }
     async function loadPayments(){
       list.innerHTML='<p class="empty-note">Consultando pagos…</p>';
@@ -62,19 +74,22 @@ function safeInit(){
     }
 
     client.addEventListener('change',loadAppointments);
+    appt.addEventListener('change',setFormState);
     refresh?.addEventListener('click',loadPayments);
     nav.addEventListener('click',()=>{void initializePayments();});
+    setFormState();
     form.addEventListener('submit',async e=>{
       e.preventDefault();
       if(!window.solutionCan('payments.update')){status.textContent='No tienes permiso para registrar pagos';return;}
       if(!client.value){status.textContent='Selecciona un cliente';return;}
+      if(!appt.value){status.textContent='Selecciona una cita realizada';return;}
       const amount=Number(document.getElementById('paymentAmount')?.value||0);
       if(!(amount>0)){status.textContent='Escribe un importe válido';return;}
       status.textContent='Registrando…';
       try{
         await sendJson('../backend/api/payments.php',{
           client_id:Number(client.value),
-          appointment_id:appt.value?Number(appt.value):null,
+          appointment_id:Number(appt.value),
           amount,
           method:document.getElementById('paymentMethod')?.value||'other',
           status:'paid',
@@ -83,6 +98,8 @@ function safeInit(){
         status.textContent='Pago registrado ✓';
         document.getElementById('paymentAmount').value='';
         document.getElementById('paymentReference').value='';
+        appt.value='';
+        setFormState();
         await loadPayments();
       }catch(err){status.textContent=err.message||'No se pudo registrar el pago';}
     });
