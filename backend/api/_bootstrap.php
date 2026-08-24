@@ -29,6 +29,25 @@ function rolePermissions(string $role):array{$role=canonicalRole($role);$map=['a
 function userCan(array $user,string $permission):bool{$p=rolePermissions((string)($user['role']??''));return in_array('*',$p,true)||in_array($permission,$p,true);}
 function requirePermission(string $permission):array{$user=requireAuth();if(!userCan($user,$permission))respond(['error'=>'No tienes permiso para realizar esta acción'],403);return $user;}
 
+function requestIp(): string
+{
+    return substr((string)($_SERVER['REMOTE_ADDR']??'unknown'),0,64);
+}
+function enforceRateLimit(string $bucket,int $limit,int $windowSeconds):void
+{
+    $now=time();$dir=sys_get_temp_dir().'/solution-spa-rate-limits';
+    if(!is_dir($dir)&&!@mkdir($dir,0700,true)&&!is_dir($dir))return;
+    $key=hash('sha256',$bucket.'|'.requestIp());$path=$dir.'/'.$key.'.json';$fp=@fopen($path,'c+');if(!$fp)return;
+    try{
+        if(!flock($fp,LOCK_EX))return;
+        $raw=stream_get_contents($fp);$state=json_decode($raw?:'{}',true);if(!is_array($state))$state=[];
+        $start=(int)($state['start']??$now);$count=(int)($state['count']??0);
+        if($start>$now||$now-$start>=$windowSeconds){$start=$now;$count=0;}
+        if($count>=$limit){$retry=max(1,$windowSeconds-($now-$start));header('Retry-After: '.$retry);respond(['error'=>'Demasiados intentos. Espera un momento antes de volver a intentar.'],429);}
+        $count++;rewind($fp);ftruncate($fp,0);fwrite($fp,json_encode(['start'=>$start,'count'=>$count]));fflush($fp);
+    }finally{flock($fp,LOCK_UN);fclose($fp);}
+}
+
 function csrfToken(): string
 {
     if(empty($_SESSION['csrf_token'])||!is_string($_SESSION['csrf_token']))$_SESSION['csrf_token']=bin2hex(random_bytes(32));
