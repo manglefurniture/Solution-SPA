@@ -63,10 +63,14 @@ CREATE TABLE IF NOT EXISTS users (
   name VARCHAR(120) NOT NULL,
   email VARCHAR(160) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
-  role ENUM('admin','staff') NOT NULL DEFAULT 'admin',
+  role ENUM('admin','operator','client') NOT NULL DEFAULT 'admin',
+  client_id BIGINT UNSIGNED NULL,
   active TINYINT(1) NOT NULL DEFAULT 1,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_users_client FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
+  INDEX idx_users_role (role),
+  INDEX idx_users_client_id (client_id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS web_requests (
