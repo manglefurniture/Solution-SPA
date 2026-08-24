@@ -10,46 +10,26 @@ document.getElementById('contextAdd')?.addEventListener('click',()=>setTimeout((
 
 const methodLabel=v=>({cash:'Efectivo',card:'Tarjeta',transfer:'Transferencia',other:'Otro'}[v]||v||'Otro');
 const money=v=>'$'+Number(v||0).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2});
+async function paymentForAppointment(clientId,appointmentId){try{const rows=await apiData(`../backend/api/payments.php?client_id=${Number(clientId)}`);return rows.find(p=>Number(p.appointment_id)===Number(appointmentId)&&p.status==='paid')||null}catch(e){return null}}
+async function servicePrice(serviceId){try{const rows=await apiData('../backend/api/services.php');const s=rows.find(x=>Number(x.id)===Number(serviceId));return s&&s.price!==null&&s.price!==undefined&&Number(s.price)>0?Number(s.price):''}catch(e){return ''}}
 
-async function paymentForAppointment(clientId,appointmentId){
-  try{
-    const rows=await apiData(`../backend/api/payments.php?client_id=${Number(clientId)}`);
-    return rows.find(p=>Number(p.appointment_id)===Number(appointmentId)&&p.status==='paid')||null;
-  }catch(e){return null}
-}
-
-async function servicePrice(serviceId){
-  try{
-    const rows=await apiData('../backend/api/services.php');
-    const s=rows.find(x=>Number(x.id)===Number(serviceId));
-    return s&&s.price!==null&&s.price!==undefined&&Number(s.price)>0?Number(s.price):'';
-  }catch(e){return ''}
-}
+function paidMarkup(amount,method,paidAt=''){return `<div class="appointment-payment-head"><div><small>COBRO DE LA CITA</small><h3>Pago registrado</h3></div><span class="payment-check">✓</span></div><div class="payment-receipt"><strong>${money(amount)}</strong><span>${esc(methodLabel(method))}${paidAt?` · ${esc(String(paidAt).slice(0,16))}`:''}</span></div>`}
 
 async function appendPaymentCard(a,id){
   if(!a||a.status!=='completed')return;
   const existing=await paymentForAppointment(a.client_id,id);
-  const card=document.createElement('section');
-  card.className='appointment-payment-card';
-  if(existing){
-    card.innerHTML=`<div class="appointment-payment-head"><div><small>COBRO DE LA CITA</small><h3>Pago registrado</h3></div><span class="payment-check">✓</span></div><div class="payment-receipt"><strong>${money(existing.amount)}</strong><span>${esc(methodLabel(existing.method))}${existing.paid_at?` · ${esc(String(existing.paid_at).slice(0,16))}`:''}</span></div>`;
-    modalFields.appendChild(card);
-    return;
-  }
+  const card=document.createElement('section');card.className='appointment-payment-card';
+  if(existing){card.innerHTML=paidMarkup(existing.amount,existing.method,existing.paid_at);modalFields.appendChild(card);return;}
   const suggested=await servicePrice(a.service_id);
   card.innerHTML=`<div class="appointment-payment-head"><div><small>COBRO DE LA CITA</small><h3>Registrar pago</h3></div><span class="payment-ready">Cita realizada</span></div><p class="payment-help">La cita ya fue realizada. Registra ahora el cobro correspondiente.</p><div class="payment-box"><label>Importe<input type="number" min="0.01" step="0.01" value="${suggested!==''?suggested:''}" placeholder="0.00" data-pay-amount></label><label>Método<select data-pay-method><option value="cash">Efectivo</option><option value="card">Tarjeta</option><option value="transfer">Transferencia</option><option value="other">Otro</option></select></label><button type="button" data-register-payment>Registrar pago</button><span class="payment-inline-status" data-pay-status></span></div>`;
   modalFields.appendChild(card);
   const button=card.querySelector('[data-register-payment]');
   button.onclick=async()=>{
-    const amount=Number(card.querySelector('[data-pay-amount]').value);
-    const status=card.querySelector('[data-pay-status]');
+    const amount=Number(card.querySelector('[data-pay-amount]').value),method=card.querySelector('[data-pay-method]').value,status=card.querySelector('[data-pay-status]');
     if(!(amount>0)){status.textContent='Escribe un importe válido';status.classList.add('error');return}
     button.disabled=true;button.textContent='Registrando…';status.textContent='';status.classList.remove('error');
-    try{
-      await postJson('../backend/api/payments.php',{client_id:Number(a.client_id),appointment_id:Number(id),amount,method:card.querySelector('[data-pay-method]').value,status:'paid'});
-      card.innerHTML=`<div class="appointment-payment-head"><div><small>COBRO DE LA CITA</small><h3>Pago registrado</h3></div><span class="payment-check">✓</span></div><div class="payment-receipt"><strong>${money(amount)}</strong><span>${esc(methodLabel(card.querySelector?.('[data-pay-method]')?.value||''))}</span></div>`;
-      if(window.uxToast)window.uxToast('Pago registrado ✓');
-    }catch(e){button.disabled=false;button.textContent='Registrar pago';status.textContent=e.message||'No se pudo registrar el pago';status.classList.add('error')}
+    try{await postJson('../backend/api/payments.php',{client_id:Number(a.client_id),appointment_id:Number(id),amount,method,status:'paid'});card.innerHTML=paidMarkup(amount,method);if(window.uxToast)window.uxToast('Pago registrado ✓')}
+    catch(e){button.disabled=false;button.textContent='Registrar pago';status.textContent=e.message||'No se pudo registrar el pago';status.classList.add('error')}
   };
 }
 
@@ -61,21 +41,15 @@ if(typeof openAppointmentCard==='function'){
     const appointment=a[0];if(!appointment)return;
     const current=appointment.manager_user_id||'';
     if(!modalFields.querySelector('[name="manager_user_id"]')){const actions=modalFields.querySelector('.entity-actions');(actions||modalFields).insertAdjacentHTML(actions?'beforebegin':'beforeend',managerSelect(rows,current));}
-
     const completedButton=modalFields.querySelector('[data-quick-status="completed"]');
-    if(completedButton){
+    if(completedButton&&appointment.status!=='completed'){
       const clean=completedButton.cloneNode(true);completedButton.replaceWith(clean);
       clean.addEventListener('click',async()=>{
         clean.disabled=true;clean.textContent='Marcando…';
-        try{
-          await patchJson('../backend/api/appointments.php',{id:Number(id),status:'completed'});
-          await refreshSchedule();
-          if(window.uxToast)window.uxToast('Cita marcada como realizada');
-          await openAppointmentCard(id);
-        }catch(e){modalStatus.textContent=e.message||'No se pudo marcar la cita';modalStatus.className='pilot error';clean.disabled=false;clean.textContent='✓ Marcar realizada'}
+        try{await patchJson('../backend/api/appointments.php',{id:Number(id),status:'completed'});await refreshSchedule();if(window.uxToast)window.uxToast('Cita marcada como realizada');await openAppointmentCard(id)}
+        catch(e){modalStatus.textContent=e.message||'No se pudo marcar la cita';modalStatus.className='pilot error';clean.disabled=false;clean.textContent='✓ Marcar realizada'}
       });
-    }
-
+    }else if(completedButton&&appointment.status==='completed')completedButton.remove();
     await appendPaymentCard(appointment,id);
   }
 }
