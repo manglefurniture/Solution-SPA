@@ -1,20 +1,31 @@
 # Solution SPA
 
-Spa de aparatología con un frontend conceptual de estética avanzada y bienestar.
+Spa de aparatología con frontend público, panel administrativo y backend PHP/MariaDB.
 
 ## Incluye
 
 - diseño responsive y prioridad móvil;
 - tratamientos faciales y corporales;
-- sección de aparatología y método de atención;
-- carta de servicios;
-- formulario de valoración con interacción local;
-- metadatos sociales, favicon y accesibilidad básica.
+- carta de servicios y solicitud pública de valoración;
+- clientes, citas, servicios, pagos y usuarios;
+- autenticación por sesión, roles/permisos, CSRF y rate limiting;
+- portal de cliente y flujo de registro;
+- health check para backend/MariaDB;
+- auditoría de mutaciones administrativas y financieras;
+- teléfonos normalizados a E.164;
+- migraciones versionadas, pruebas y CI;
+- scripts de backup, despliegue verificable y rollback.
 
-## Próxima etapa
+## Backend
 
-Conectar el formulario al WhatsApp o correo definitivo, sustituir los datos de
-concepto por la información real del negocio y habilitar GitHub Pages desde la
-rama `main`.
+El backend está preparado para PHP 8.4 + MariaDB. Consulta `BACKEND_PILOT.md` para la puesta en marcha y `deployment/README.md` para el flujo de producción.
+
+## Hache-Base
+
+El endurecimiento reutiliza patrones de Hache-Base adaptados al SPA. No se copió la base completa: se incorporaron únicamente las capacidades útiles para este proyecto. El detalle está en `docs/HACHE_BASE_HARDENING.md`.
+
+## Entornos
+
+La configuración local puede vivir en `backend/config.php` (ignorado por Git). Staging y producción pueden usar variables `DB_*` y las demás variables descritas en `.env.example`. Consulta `docs/ENVIRONMENTS.md`.
 
 Las fotografías demostrativas provienen de Pexels y se cargan desde su CDN.
