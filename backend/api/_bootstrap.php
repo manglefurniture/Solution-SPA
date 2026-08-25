@@ -3,11 +3,15 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__) . '/db.php';
+require_once dirname(__DIR__) . '/audit.php';
+require_once dirname(__DIR__) . '/phone.php';
 
 date_default_timezone_set('America/Cancun');
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
+header('X-Content-Type-Options: nosniff');
+header('Referrer-Policy: strict-origin-when-cross-origin');
 
 function requestIsSecure(): bool
 {

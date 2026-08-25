@@ -1,34 +1,35 @@
-# Solution SPA — piloto de backend
+# Solution SPA — backend PHP/MariaDB
 
-Este piloto prepara el repositorio para funcionar en la VPS con PHP 8.4 + MariaDB. GitHub Pages seguirá mostrando únicamente el frontend estático; los archivos PHP entrarán en funcionamiento al desplegar el proyecto en la VPS.
+El repositorio contiene un backend funcional para PHP 8.4 + MariaDB. GitHub Pages puede seguir mostrando el frontend estático; las rutas PHP funcionan al desplegar el proyecto en un servidor compatible.
 
 ## Incluido
 
 - Base MariaDB `solution_spa`.
-- Tablas: `clients`, `services`, `appointments`, `treatments`, `users`.
+- Clientes, servicios, citas, tratamientos, pagos, usuarios, tokens de sesión persistente y solicitudes web.
 - Conexión PDO con consultas preparadas.
-- API inicial para clientes, servicios y citas.
-- Endpoint de salud para comprobar la conexión con MariaDB.
-- Archivo de configuración de ejemplo sin credenciales reales.
+- Autenticación por sesión y opción de recordar sesión.
+- Roles `admin`, `operator` y `client` con permisos.
+- Protección CSRF para mutaciones autenticadas.
+- Rate limiting para formularios públicos.
+- Portal/registro de cliente.
+- Health check de MariaDB.
+- Auditoría de mutaciones (`audit_events`).
+- Normalización de teléfonos E.164.
+- Migraciones versionadas, pruebas y CI.
+- Scripts de backup, deploy y rollback en `deployment/`.
 
-## Despliegue en VPS
+## Puesta en marcha
 
 1. Crear un usuario de MariaDB exclusivo para Solution SPA.
-2. Ejecutar `database/schema.sql`.
-3. Copiar `backend/config.example.php` como `backend/config.php`.
-4. Colocar las credenciales locales en `backend/config.php` (el archivo está ignorado por Git).
+2. Ejecutar `database/schema.sql` en instalaciones nuevas.
+3. En instalaciones existentes, ejecutar `php database/migrate.php` después de un backup.
+4. Configurar `backend/config.php` o variables `DB_*`.
 5. Configurar Nginx/PHP-FPM para servir el proyecto.
-6. Probar `/backend/api/health.php`; debe responder `{"ok":true,"database":"connected"}`.
+6. Probar `/backend/api/health.php`; debe responder con `ok: true` y conexión de base operativa.
+7. Ejecutar `bash tests/run.sh`.
 
-## Endpoints del piloto
+## Producción
 
-- `GET /backend/api/clients.php` — listar/buscar clientes.
-- `POST /backend/api/clients.php` — crear cliente.
-- `GET /backend/api/services.php` — listar servicios.
-- `POST /backend/api/services.php` — crear servicio.
-- `GET /backend/api/appointments.php?date=YYYY-MM-DD` — agenda por fecha.
-- `POST /backend/api/appointments.php` — crear cita.
+No publicar rutas de escritura sin HTTPS y sin conservar las protecciones del backend. Los secretos no deben almacenarse en GitHub.
 
-## Antes de hacerlo público
-
-La API es una base técnica del piloto. Antes de exponer las rutas de escritura en producción se debe añadir autenticación del panel administrativo, protección CSRF/sesiones y validaciones adicionales. No guardar contraseñas ni secretos en GitHub.
+El flujo recomendado de despliegue está en `deployment/README.md` y la separación de entornos en `docs/ENVIRONMENTS.md`.

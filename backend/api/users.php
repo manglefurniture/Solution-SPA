@@ -53,7 +53,9 @@ if ($method === 'POST') {
         if ((string)$e->getCode() === '23000') respond(['error' => 'Ya existe un usuario con ese correo'], 409);
         throw $e;
     }
-    respond(['id' => (int)$pdo->lastInsertId()], 201);
+    $id = (int)$pdo->lastInsertId();
+    auditMutation($pdo, $admin, 'user.created', 'user', $id, null, ['name'=>$name,'email'=>$email,'role'=>$role,'client_id'=>$clientId,'active'=>1]);
+    respond(['id' => $id], 201);
 }
 
 if ($method === 'PATCH') {
@@ -75,14 +77,27 @@ if ($method === 'PATCH') {
 
     $params=['id'=>$id,'name'=>$name,'email'=>$email,'role'=>$role,'client_id'=>$clientId,'active'=>$active];
     $sql='UPDATE users SET name=:name,email=:email,role=:role,client_id=:client_id,active=:active';
+    $passwordChanged = false;
     if (isset($data['password']) && (string)$data['password'] !== '') {
         $password=(string)$data['password'];
         if(strlen($password)<8)respond(['error'=>'La contraseña debe tener al menos 8 caracteres'],422);
         $sql.=',password_hash=:password_hash';
         $params['password_hash']=password_hash($password,PASSWORD_DEFAULT);
+        $passwordChanged = true;
     }
     $sql.=' WHERE id=:id';
     try{$pdo->prepare($sql)->execute($params);}catch(PDOException $e){if((string)$e->getCode()==='23000')respond(['error'=>'Ya existe un usuario con ese correo'],409);throw $e;}
+
+    auditMutation(
+        $pdo,
+        $admin,
+        'user.updated',
+        'user',
+        $id,
+        $current,
+        ['id'=>$id,'name'=>$name,'email'=>$email,'role'=>$role,'client_id'=>$clientId,'active'=>$active],
+        ['password_changed'=>$passwordChanged]
+    );
     respond(['ok'=>true]);
 }
 

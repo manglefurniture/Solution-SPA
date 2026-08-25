@@ -1,0 +1,63 @@
+name: Solution SPA CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    services:
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MARIADB_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mariadb-admin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PHP and MariaDB client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y php-cli php-mysql php-mbstring mariadb-client
+
+      - name: PHP and regression checks
+        run: bash tests/run.sh
+
+      - name: Shell syntax
+        run: |
+          find deployment tests -type f -name '*.sh' -print0 \
+            | xargs -0 -r -n1 bash -n
+
+      - name: Build fresh schema
+        env:
+          MYSQL_PWD: root
+        run: mariadb -h 127.0.0.1 -uroot < database/schema.sql
+
+      - name: Run migration runner twice
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_NAME: solution_spa
+          DB_USER: root
+          DB_PASSWORD: root
+        run: |
+          php database/migrate.php
+          php database/migrate.php
+
+      - name: Verify audit table
+        env:
+          MYSQL_PWD: root
+        run: |
+          mariadb -h 127.0.0.1 -uroot solution_spa -e "DESCRIBE audit_events;"
+          mariadb -h 127.0.0.1 -uroot solution_spa -e "SELECT name FROM schema_migrations ORDER BY name;"
