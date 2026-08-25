@@ -1,3 +1,31 @@
+# Local/runtime configuration
 backend/config.php
 .env
+.env.*
+!.env.example
+
+# Secrets and keys
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Logs and temporary files
 *.log
+*.pid
+tmp/
+.cache/
+
+# Local backups and dumps
+backups/
+*.sql.gz
+*.dump
+*.bak
+
+# Dependencies / IDE
+vendor/
+node_modules/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
