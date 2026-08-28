@@ -8,19 +8,55 @@ if (PHP_SAPI !== 'cli') {
 }
 
 $root = rtrim((string)(getenv('APP_ROOT') ?: dirname(__DIR__)), DIRECTORY_SEPARATOR);
-$appUrl = rtrim(trim((string)getenv('APP_URL')), '/');
 $sourceOrigin = 'https://manglefurniture.github.io/Solution-SPA';
 $checkOnly = in_array('--check', $argv, true);
+$detectOnly = in_array('--detect', $argv, true);
+$validateOnly = in_array('--validate-url', $argv, true);
 
-if ($appUrl === '') {
-    fwrite(STDERR, "PUBLIC_ORIGIN_FAIL APP_URL is required\n");
+function normalizePublicUrl(string $url): string
+{
+    $url = rtrim(trim($url), '/');
+    if ($url === '') {
+        throw new InvalidArgumentException('APP_URL is required');
+    }
+
+    $parts = parse_url($url);
+    $scheme = strtolower((string)($parts['scheme'] ?? ''));
+    if (!is_array($parts) || !in_array($scheme, ['http', 'https'], true) || empty($parts['host'])) {
+        throw new InvalidArgumentException('APP_URL must be an absolute http(s) URL');
+    }
+    if (isset($parts['query']) || isset($parts['fragment']) || isset($parts['user']) || isset($parts['pass'])) {
+        throw new InvalidArgumentException('APP_URL must be a public origin/path without credentials, query or fragment');
+    }
+
+    return $url;
+}
+
+if ($detectOnly) {
+    $index = file_get_contents($root . DIRECTORY_SEPARATOR . 'index.html');
+    if ($index === false || !preg_match('~<link\s+rel="canonical"\s+href="([^"]+)"\s*/?>~i', $index, $match)) {
+        fwrite(STDERR, "PUBLIC_ORIGIN_FAIL canonical not found\n");
+        exit(1);
+    }
+    try {
+        echo normalizePublicUrl((string)$match[1]) . "\n";
+    } catch (InvalidArgumentException $e) {
+        fwrite(STDERR, "PUBLIC_ORIGIN_FAIL {$e->getMessage()}\n");
+        exit(1);
+    }
+    exit(0);
+}
+
+try {
+    $appUrl = normalizePublicUrl((string)getenv('APP_URL'));
+} catch (InvalidArgumentException $e) {
+    fwrite(STDERR, "PUBLIC_ORIGIN_FAIL {$e->getMessage()}\n");
     exit(1);
 }
 
-$parts = parse_url($appUrl);
-if (!is_array($parts) || !in_array(strtolower((string)($parts['scheme'] ?? '')), ['http', 'https'], true) || empty($parts['host'])) {
-    fwrite(STDERR, "PUBLIC_ORIGIN_FAIL APP_URL must be an absolute http(s) URL\n");
-    exit(1);
+if ($validateOnly) {
+    echo "PUBLIC_ORIGIN_URL_OK {$appUrl}\n";
+    exit(0);
 }
 
 $files = ['index.html', 'privacy.html', 'robots.txt', 'sitemap.xml'];
