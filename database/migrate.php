@@ -60,6 +60,16 @@ function fkExists(PDO $pdo, string $name): bool
     return (bool)$stmt->fetchColumn();
 }
 
+function triggerExists(PDO $pdo, string $name): bool
+{
+    $stmt = $pdo->prepare(
+        'SELECT 1 FROM information_schema.TRIGGERS '
+        . 'WHERE TRIGGER_SCHEMA=DATABASE() AND TRIGGER_NAME=:name LIMIT 1'
+    );
+    $stmt->execute(['name' => $name]);
+    return (bool)$stmt->fetchColumn();
+}
+
 function applyMigration(PDO $pdo, string $name, callable $migration): void
 {
     if (applied($pdo, $name)) {
@@ -139,13 +149,29 @@ applyMigration($pdo, '20260827_paid_appointment_integrity', static function (PDO
     }
 
     if (!columnExists($pdo, 'payments', 'paid_appointment_id')) {
-        $pdo->exec(
-            "ALTER TABLE payments ADD COLUMN paid_appointment_id BIGINT UNSIGNED "
-            . "GENERATED ALWAYS AS (CASE WHEN status = 'paid' THEN appointment_id ELSE NULL END) STORED AFTER appointment_id"
-        );
+        $pdo->exec('ALTER TABLE payments ADD COLUMN paid_appointment_id BIGINT UNSIGNED NULL AFTER status');
     }
+
+    $pdo->exec(
+        "UPDATE payments SET paid_appointment_id = CASE "
+        . "WHEN status='paid' THEN appointment_id ELSE NULL END"
+    );
+
     if (!indexExists($pdo, 'payments', 'uq_payments_paid_appointment')) {
         $pdo->exec('ALTER TABLE payments ADD UNIQUE INDEX uq_payments_paid_appointment (paid_appointment_id)');
+    }
+
+    if (!triggerExists($pdo, 'trg_payments_paid_appointment_insert')) {
+        $pdo->exec(
+            "CREATE TRIGGER trg_payments_paid_appointment_insert BEFORE INSERT ON payments FOR EACH ROW "
+            . "SET NEW.paid_appointment_id = CASE WHEN NEW.status='paid' THEN NEW.appointment_id ELSE NULL END"
+        );
+    }
+    if (!triggerExists($pdo, 'trg_payments_paid_appointment_update')) {
+        $pdo->exec(
+            "CREATE TRIGGER trg_payments_paid_appointment_update BEFORE UPDATE ON payments FOR EACH ROW "
+            . "SET NEW.paid_appointment_id = CASE WHEN NEW.status='paid' THEN NEW.appointment_id ELSE NULL END"
+        );
     }
 });
 
