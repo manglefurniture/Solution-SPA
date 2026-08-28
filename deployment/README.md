@@ -21,12 +21,16 @@ Como mínimo:
 - `DB_USER`
 - `DB_PASSWORD`
 - `DEPLOY_BRANCH` (opcional, `main` por defecto)
+- `RATE_LIMIT_DIR` (recomendado; si se omite se usa el directorio temporal del sistema)
+- `AUDIT_RETENTION_DAYS` (opcional, 180 por defecto)
 
 No guardar estos valores reales en el repositorio.
 
 `APP_URL` es la URL pública autoritativa del entorno, sin `/` final. El deploy la usa para renderizar canonical, `og:url`, `robots.txt` y `sitemap.xml`; así staging o producción nunca heredan como canonical la URL de la demo de GitHub Pages.
 
-El render modifica únicamente `index.html`, `privacy.html`, `robots.txt` y `sitemap.xml` en el checkout desplegado. En la siguiente ejecución, el preflight acepta ese estado solo si coincide exactamente con el resultado determinista del `APP_URL` actual. Cualquier cambio adicional sigue haciendo fallar el precheck.
+El render modifica únicamente `index.html`, `privacy.html`, `robots.txt` y `sitemap.xml` en el checkout desplegado. En la siguiente ejecución, el preflight acepta ese estado solo si coincide exactamente con el resultado determinista del origen previamente desplegado. Cualquier cambio adicional sigue haciendo fallar el precheck. Un cambio legítimo de `APP_URL` se aplica durante el siguiente deploy.
+
+El preflight comprueba además que el almacenamiento de rate limiting sea escribible. En runtime, si ese almacenamiento deja de estar disponible, los endpoints protegidos fallan con 503 en lugar de continuar sin limitación.
 
 ## Desplegar
 
@@ -50,7 +54,19 @@ Por defecto vuelve al commit guardado justo antes del último despliegue:
 bash deployment/rollback.sh
 ```
 
-También puede indicarse `TARGET_COMMIT`. Restaurar base de datos es deliberadamente explícito y solo ocurre si se proporciona `RESTORE_DB_BACKUP=/ruta/database.sql.gz`.
+También puede indicarse `TARGET_COMMIT`. Después del `git reset`, el rollback vuelve a renderizar el origen SEO desde `APP_URL` y lo valida antes de ejecutar tests y health-check; de ese modo no puede restaurar por accidente el canonical de GitHub Pages.
+
+Restaurar base de datos es deliberadamente explícito y solo ocurre si se proporciona `RESTORE_DB_BACKUP=/ruta/database.sql.gz`.
+
+## Auditoría
+
+Los eventos vencidos se eliminan automáticamente según `AUDIT_RETENTION_DAYS`. Para una poda operativa explícita puede ejecutarse:
+
+```bash
+php database/prune_audit.php
+```
+
+Pagos y cambios de usuarios/roles requieren que su evento de auditoría se persista dentro de la misma transacción; si falla la auditoría, el cambio se revierte.
 
 ## Regla operativa
 
