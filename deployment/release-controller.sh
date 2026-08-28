@@ -31,18 +31,26 @@ php -l "$TOOL_DIR/render-public-origin.php" >/dev/null
 cd "$APP_DIR"
 [[ -d .git ]] || { echo "DEPLOY_FAIL APP_DIR is not a git checkout" >&2; exit 1; }
 
-# rollback.sh intentionally installs a tiny bootstrap in deployment/deploy.sh so
-# the documented command keeps using modern deployment tooling after reverting
-# to an old commit. Once this external controller is running, restore the file
-# from HEAD before preflight so historical strict-clean checks cannot be tripped
-# by the bootstrap itself.
-if [[ -f deployment/deploy.sh ]] && grep -q 'SOLUTION_SPA_DEPLOY_BOOTSTRAP' deployment/deploy.sh; then
-  if git ls-files --error-unmatch deployment/deploy.sh >/dev/null 2>&1; then
-    git checkout -- deployment/deploy.sh
-  else
-    rm -f deployment/deploy.sh
+# rollback-controller.sh intentionally installs tiny bootstraps for both deploy
+# and rollback so documented commands keep using preserved modern tooling after
+# reverting to an old commit. Once this external release controller is running,
+# restore those files from HEAD before preflight so historical strict-clean
+# checks cannot be tripped by either bootstrap.
+restore_bootstrap_from_head() {
+  local path="$1"
+  local marker="$2"
+
+  if [[ -f "$path" ]] && grep -q "$marker" "$path"; then
+    if git ls-files --error-unmatch "$path" >/dev/null 2>&1; then
+      git checkout -- "$path"
+    else
+      rm -f "$path"
+    fi
   fi
-fi
+}
+
+restore_bootstrap_from_head deployment/deploy.sh SOLUTION_SPA_DEPLOY_BOOTSTRAP
+restore_bootstrap_from_head deployment/rollback.sh SOLUTION_SPA_ROLLBACK_BOOTSTRAP
 
 RENDER_HELPER="$TOOL_DIR/render-public-origin.php" bash "$TOOL_DIR/preflight.sh"
 mkdir -p "$BACKUP_DIR"
