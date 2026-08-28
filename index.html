@@ -342,22 +342,22 @@
           <form class="booking-form" id="booking-form">
             <label for="booking-name">
               <span>Tu nombre</span>
+              <input id="booking-name" name="name" type="text" placeholder="¿Cómo te llamas?" required />
             </label>
-            <input id="booking-name" name="name" type="text" placeholder="¿Cómo te llamas?" required />
             <label for="booking-phone">
               <span>Tu WhatsApp</span>
+              <input id="booking-phone" name="phone" type="tel" placeholder="Número con lada" required />
             </label>
-            <input id="booking-phone" name="phone" type="tel" placeholder="Número con lada" required />
             <label class="full-field" for="booking-interest">
               <span>¿Qué te gustaría trabajar?</span>
+              <select id="booking-interest" name="interest" required>
+                <option value="" selected disabled>Elige una opción</option>
+                <option>Rostro y piel</option>
+                <option>Moldeado corporal</option>
+                <option>Depilación</option>
+                <option>Quiero una recomendación</option>
+              </select>
             </label>
-            <select class="full-field" id="booking-interest" name="interest" required>
-              <option value="" selected disabled>Elige una opción</option>
-              <option>Rostro y piel</option>
-              <option>Moldeado corporal</option>
-              <option>Depilación</option>
-              <option>Quiero una recomendación</option>
-            </select>
             <p class="contact-intro full-field">No envíes datos personales reales en esta demo. Consulta el <a href="privacy.html">aviso de privacidad de la demostración</a>.</p>
             <button class="button button-contact full-field" type="submit">
               Solicitar valoración <span aria-hidden="true">↗</span>
@@ -383,7 +383,6 @@
           <span class="brand-copy"><strong>Solution</strong><small>SPA · ESTÉTICA</small></span>
         </a>
         <p>Estética avanzada · Bienestar real</p>
-        <a href="privacy.html">Privacidad</a>
         <a href="#inicio">Volver arriba ↑</a>
       </footer>
     </main>
