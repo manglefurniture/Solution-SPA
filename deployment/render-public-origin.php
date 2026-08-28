@@ -87,10 +87,10 @@ foreach ($files as $file) {
         // historical page body, styles and application behavior.
         if ($file === 'index.html') {
             try {
-                if (!preg_match('~<link\s+rel="canonical"\b~i', $content)) {
+                if (!preg_match('~<link\s+rel="canonical"~i', $content)) {
                     $content = injectHeadTag($content, '<link rel="canonical" href="' . $appUrl . '/" />');
                 }
-                if (!preg_match('~<meta\s+property="og:url"\b~i', $content)) {
+                if (!preg_match('~<meta\s+property="og:url"~i', $content)) {
                     $content = injectHeadTag($content, '<meta property="og:url" content="' . $appUrl . '/" />');
                 }
             } catch (RuntimeException $e) {
