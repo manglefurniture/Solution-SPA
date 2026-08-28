@@ -37,7 +37,7 @@ if($method==='POST'){
     $paidAt=$status==='paid'?trim((string)($d['paid_at']??date('Y-m-d H:i:s'))):null;
     $after=['client_id'=>$cid,'appointment_id'=>$appointment,'amount'=>(float)$amount,'method'=>$methodName,'status'=>$status,'reference'=>trim((string)($d['reference']??''))?:null,'notes'=>trim((string)($d['notes']??''))?:null,'paid_at'=>$paidAt];
     $q=$pdo->prepare('INSERT INTO payments(client_id,appointment_id,amount,method,status,reference,notes,paid_at) VALUES(:client_id,:appointment_id,:amount,:method,:status,:reference,:notes,:paid_at)');$q->execute($after);$id=(int)$pdo->lastInsertId();
-    auditMutation($pdo,$user,'payment.created','payment',$id,null,$after,['financial'=>true]);
+    auditMutationRequired($pdo,$user,'payment.created','payment',$id,null,$after,['financial'=>true]);
     $pdo->commit();respond(['id'=>$id],201);
   }catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();if(paymentConstraintConflict($e))respond(['error'=>'Esta cita ya tiene un pago registrado'],409);respond(['error'=>'No se pudo registrar el pago'],500);}
 }
@@ -54,7 +54,7 @@ if($method==='PATCH'){
     $paidAt=$status==='paid'?($cur['paid_at']?:date('Y-m-d H:i:s')):null;
     $after=['amount'=>(float)$amount,'method'=>$methodName,'status'=>$status,'reference'=>trim((string)($d['reference']??$cur['reference']??''))?:null,'notes'=>trim((string)($d['notes']??$cur['notes']??''))?:null,'paid_at'=>$paidAt,'id'=>$id];
     $pdo->prepare('UPDATE payments SET amount=:amount,method=:method,status=:status,reference=:reference,notes=:notes,paid_at=:paid_at WHERE id=:id')->execute($after);
-    auditMutation($pdo,$user,'payment.updated','payment',$id,$cur,$after,['financial'=>true]);
+    auditMutationRequired($pdo,$user,'payment.updated','payment',$id,$cur,$after,['financial'=>true]);
     $pdo->commit();respond(['ok'=>true]);
   }catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();if(paymentConstraintConflict($e))respond(['error'=>'Esta cita ya tiene un pago registrado'],409);respond(['error'=>'No se pudo actualizar el pago'],500);}
 }
