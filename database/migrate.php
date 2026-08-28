@@ -125,4 +125,28 @@ applyMigration($pdo, '20260825_hache_base_hardening', static function (PDO $pdo)
     $pdo->exec($sql);
 });
 
+applyMigration($pdo, '20260827_paid_appointment_integrity', static function (PDO $pdo): void {
+    $duplicate = $pdo->query(
+        "SELECT appointment_id, COUNT(*) AS total FROM payments "
+        . "WHERE appointment_id IS NOT NULL AND status='paid' "
+        . "GROUP BY appointment_id HAVING COUNT(*) > 1 LIMIT 1"
+    )->fetch();
+    if ($duplicate) {
+        throw new RuntimeException(
+            'Existing duplicate paid payments found for appointment ' . (string)$duplicate['appointment_id']
+            . '. Resolve them before applying the uniqueness constraint.'
+        );
+    }
+
+    if (!columnExists($pdo, 'payments', 'paid_appointment_id')) {
+        $pdo->exec(
+            "ALTER TABLE payments ADD COLUMN paid_appointment_id BIGINT UNSIGNED "
+            . "GENERATED ALWAYS AS (CASE WHEN status = 'paid' THEN appointment_id ELSE NULL END) STORED AFTER appointment_id"
+        );
+    }
+    if (!indexExists($pdo, 'payments', 'uq_payments_paid_appointment')) {
+        $pdo->exec('ALTER TABLE payments ADD UNIQUE INDEX uq_payments_paid_appointment (paid_appointment_id)');
+    }
+});
+
 echo "Migrations OK\n";
