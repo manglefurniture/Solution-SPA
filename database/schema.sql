@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS payments (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   client_id BIGINT UNSIGNED NOT NULL,
   appointment_id BIGINT UNSIGNED NULL,
+  paid_appointment_id BIGINT UNSIGNED GENERATED ALWAYS AS (CASE WHEN status = 'paid' THEN appointment_id ELSE NULL END) STORED,
   amount DECIMAL(10,2) NOT NULL,
   method ENUM('cash','card','transfer','other') NOT NULL DEFAULT 'other',
   status ENUM('pending','paid','refunded','cancelled') NOT NULL DEFAULT 'paid',
@@ -85,7 +86,8 @@ CREATE TABLE IF NOT EXISTS payments (
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_payments_client FOREIGN KEY (client_id) REFERENCES clients(id),
   CONSTRAINT fk_payments_appointment FOREIGN KEY (appointment_id) REFERENCES appointments(id) ON DELETE SET NULL,
-  INDEX idx_payments_client (client_id), INDEX idx_payments_appointment (appointment_id), INDEX idx_payments_status (status)
+  INDEX idx_payments_client (client_id), INDEX idx_payments_appointment (appointment_id), INDEX idx_payments_status (status),
+  UNIQUE INDEX uq_payments_paid_appointment (paid_appointment_id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS remember_tokens (
