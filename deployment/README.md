@@ -4,7 +4,7 @@ Este flujo adapta el patrón de Hache-Base al SPA sin guardar secretos en GitHub
 
 ## Flujo
 
-`PRECHECK -> BACKUP -> FETCH/RESET -> MIGRATIONS -> TESTS -> HEALTH -> DEPLOY_OK`
+`PRECHECK -> BACKUP -> FETCH/RESET -> RENDER APP_URL -> MIGRATIONS -> TESTS -> HEALTH -> DEPLOY_OK`
 
 El runner no se activa automáticamente desde GitHub porque producción debe configurar primero el VPS, variables/secretos y una política de aprobación.
 
@@ -23,6 +23,10 @@ Como mínimo:
 - `DEPLOY_BRANCH` (opcional, `main` por defecto)
 
 No guardar estos valores reales en el repositorio.
+
+`APP_URL` es la URL pública autoritativa del entorno, sin `/` final. El deploy la usa para renderizar canonical, `og:url`, `robots.txt` y `sitemap.xml`; así staging o producción nunca heredan como canonical la URL de la demo de GitHub Pages.
+
+El render modifica únicamente `index.html`, `privacy.html`, `robots.txt` y `sitemap.xml` en el checkout desplegado. En la siguiente ejecución, el preflight acepta ese estado solo si coincide exactamente con el resultado determinista del `APP_URL` actual. Cualquier cambio adicional sigue haciendo fallar el precheck.
 
 ## Desplegar
 
