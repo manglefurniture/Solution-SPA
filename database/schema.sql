@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS payments (
   amount DECIMAL(10,2) NOT NULL,
   method ENUM('cash','card','transfer','other') NOT NULL DEFAULT 'other',
   status ENUM('pending','paid','refunded','cancelled') NOT NULL DEFAULT 'paid',
-  paid_appointment_id BIGINT UNSIGNED GENERATED ALWAYS AS (CASE WHEN status = 'paid' THEN appointment_id ELSE NULL END) STORED,
+  paid_appointment_id BIGINT UNSIGNED NULL,
   reference VARCHAR(120) NULL,
   notes TEXT NULL,
   paid_at DATETIME NULL,
@@ -89,6 +89,16 @@ CREATE TABLE IF NOT EXISTS payments (
   INDEX idx_payments_client (client_id), INDEX idx_payments_appointment (appointment_id), INDEX idx_payments_status (status),
   UNIQUE INDEX uq_payments_paid_appointment (paid_appointment_id)
 ) ENGINE=InnoDB;
+
+DROP TRIGGER IF EXISTS trg_payments_paid_appointment_insert;
+CREATE TRIGGER trg_payments_paid_appointment_insert
+BEFORE INSERT ON payments FOR EACH ROW
+SET NEW.paid_appointment_id = CASE WHEN NEW.status = 'paid' THEN NEW.appointment_id ELSE NULL END;
+
+DROP TRIGGER IF EXISTS trg_payments_paid_appointment_update;
+CREATE TRIGGER trg_payments_paid_appointment_update
+BEFORE UPDATE ON payments FOR EACH ROW
+SET NEW.paid_appointment_id = CASE WHEN NEW.status = 'paid' THEN NEW.appointment_id ELSE NULL END;
 
 CREATE TABLE IF NOT EXISTS remember_tokens (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
