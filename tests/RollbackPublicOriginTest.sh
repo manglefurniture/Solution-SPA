@@ -132,7 +132,7 @@ run_case() {
   local rollback_url="https://rollback.example.test/$name"
   local forward_url="https://forward.example.test/$name"
 
-  git clone -q "$ORIGIN" "$app"
+  git clone -q -b main "$ORIGIN" "$app"
   mkdir -p "$backups"
 
   APP_DIR="$app" \
