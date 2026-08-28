@@ -41,7 +41,7 @@ if [[ -n "$dirty" ]]; then
   APP_ROOT="$tmp" APP_URL="$APP_URL" php "$APP_DIR/deployment/render-public-origin.php" >/dev/null
   for file in index.html privacy.html robots.txt sitemap.xml; do
     if ! cmp -s "$APP_DIR/$file" "$tmp/$file"; then
-      echo "PRECHECK_FAIL {$file} differs from the deterministic APP_URL render" >&2
+      echo "PRECHECK_FAIL ${file} differs from the deterministic APP_URL render" >&2
       exit 1
     fi
   done
