@@ -96,8 +96,8 @@ jobs:
         run: |
           mariadb -h 127.0.0.1 -uroot solution_spa -e "INSERT INTO audit_events(actor_type,action,entity_type,created_at) VALUES('system','ci.old','test',CURRENT_TIMESTAMP - INTERVAL 45 DAY),('system','ci.new','test',CURRENT_TIMESTAMP);"
           php database/prune_audit.php
-          old_count="$(mariadb -N -B -h 127.0.0.1 -uroot solution_spa -e \"SELECT COUNT(*) FROM audit_events WHERE action='ci.old';\")"
-          new_count="$(mariadb -N -B -h 127.0.0.1 -uroot solution_spa -e \"SELECT COUNT(*) FROM audit_events WHERE action='ci.new';\")"
+          old_count=$(mariadb -N -B -h 127.0.0.1 -uroot solution_spa -e "SELECT COUNT(*) FROM audit_events WHERE action='ci.old';")
+          new_count=$(mariadb -N -B -h 127.0.0.1 -uroot solution_spa -e "SELECT COUNT(*) FROM audit_events WHERE action='ci.new';")
           test "$old_count" = "0"
           test "$new_count" = "1"
 
