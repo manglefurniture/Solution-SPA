@@ -13,17 +13,25 @@ function auditSanitize(mixed $value): mixed
         return $value;
     }
 
-    $sensitive = [
+    $secrets = [
         'password', 'password_confirm', 'password_hash', 'token', 'access_token',
         'refresh_token', 'authorization', 'cookie', 'secret', 'api_key',
         'card_number', 'cvv',
+    ];
+    $personal = [
+        'name', 'full_name', 'client_name', 'email', 'phone', 'phone_e164',
+        'birth_date', 'address', 'notes', 'reference',
     ];
 
     $clean = [];
     foreach ($value as $key => $item) {
         $normalized = strtolower((string)$key);
-        if (in_array($normalized, $sensitive, true)) {
+        if (in_array($normalized, $secrets, true)) {
             $clean[$key] = '[REDACTED]';
+            continue;
+        }
+        if (in_array($normalized, $personal, true)) {
+            $clean[$key] = '[MINIMIZED]';
             continue;
         }
         $clean[$key] = is_array($item) ? auditSanitize($item) : $item;
@@ -39,7 +47,10 @@ function auditJson(mixed $value): ?string
     }
 
     $json = json_encode(auditSanitize($value), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    return $json === false ? null : $json;
+    if ($json === false) {
+        throw new RuntimeException('Audit payload could not be encoded.');
+    }
+    return $json;
 }
 
 function auditRequestId(): string
@@ -64,6 +75,39 @@ function auditRequestId(): string
     return $requestId;
 }
 
+function auditMinimizeIp(string $ip): ?string
+{
+    if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+        $parts = explode('.', $ip);
+        $parts[3] = '0';
+        return implode('.', $parts);
+    }
+
+    if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+        $packed = inet_pton($ip);
+        if ($packed !== false) {
+            $masked = substr($packed, 0, 8) . str_repeat("\0", 8);
+            $normalized = inet_ntop($masked);
+            return $normalized === false ? null : $normalized;
+        }
+    }
+
+    return null;
+}
+
+function auditRetentionDays(): int
+{
+    $raw = getenv('AUDIT_RETENTION_DAYS');
+    $days = $raw === false || $raw === '' ? 180 : (int)$raw;
+    return max(30, min(3650, $days));
+}
+
+function auditPrune(PDO $pdo, ?int $days = null): int
+{
+    $days = max(30, min(3650, $days ?? auditRetentionDays()));
+    return (int)$pdo->exec("DELETE FROM audit_events WHERE created_at < (CURRENT_TIMESTAMP - INTERVAL {$days} DAY)");
+}
+
 function auditMutation(
     PDO $pdo,
     ?array $actor,
@@ -84,9 +128,13 @@ function auditMutation(
     $actorType = $actor === null ? 'public' : 'user';
     $actorId = $actor['id'] ?? null;
     $actorRole = $actor['role'] ?? null;
-    $ip = substr((string)($_SERVER['REMOTE_ADDR'] ?? 'unknown'), 0, 45);
+    $ip = auditMinimizeIp((string)($_SERVER['REMOTE_ADDR'] ?? ''));
 
     try {
+        // Enforce retention as part of normal write traffic. The indexed
+        // created_at column keeps this bounded and avoids indefinite PII growth.
+        auditPrune($pdo);
+
         $stmt = $pdo->prepare(
             'INSERT INTO audit_events '
             . '(actor_type,actor_id,actor_role,action,entity_type,entity_id,source,request_id,ip_address,before_data,after_data,metadata) '
@@ -110,5 +158,21 @@ function auditMutation(
     } catch (Throwable $e) {
         error_log('Solution SPA audit failure: ' . $e->getMessage());
         return false;
+    }
+}
+
+function auditMutationRequired(
+    PDO $pdo,
+    ?array $actor,
+    string $action,
+    string $entityType,
+    int|string|null $entityId = null,
+    ?array $before = null,
+    ?array $after = null,
+    array $metadata = [],
+    string $source = 'api'
+): void {
+    if (!auditMutation($pdo, $actor, $action, $entityType, $entityId, $before, $after, $metadata, $source)) {
+        throw new RuntimeException('Required audit event could not be persisted.');
     }
 }

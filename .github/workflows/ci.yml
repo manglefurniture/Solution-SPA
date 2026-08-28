@@ -39,6 +39,35 @@ jobs:
           find deployment tests -type f -name '*.sh' -print0 \
             | xargs -0 -r -n1 bash -n
 
+      - name: Hache-Base hybrid SEO baseline
+        run: |
+          tmp="$(mktemp -d)"
+          cp index.html privacy.html robots.txt sitemap.xml "$tmp/"
+          SEO_MODE=hybrid SEO_EXPECT_INDEXABLE=1 SEO_REQUIRE_CANONICAL=1 node tests/seo-static.mjs "$tmp"
+          node tests/seo-hybrid-private.mjs
+
+      - name: APP_URL SEO render regression
+        env:
+          APP_URL: https://staging.example.test/solution-spa
+        run: |
+          tmp="$(mktemp -d)"
+          cp index.html privacy.html robots.txt sitemap.xml "$tmp/"
+          APP_ROOT="$tmp" php deployment/render-public-origin.php
+          APP_ROOT="$tmp" php deployment/render-public-origin.php --check
+          grep -F '<link rel="canonical" href="https://staging.example.test/solution-spa/" />' "$tmp/index.html"
+          grep -F '<meta property="og:url" content="https://staging.example.test/solution-spa/" />' "$tmp/index.html"
+          grep -F '<link rel="canonical" href="https://staging.example.test/solution-spa/privacy.html" />' "$tmp/privacy.html"
+          grep -F 'Sitemap: https://staging.example.test/solution-spa/sitemap.xml' "$tmp/robots.txt"
+          grep -F '<loc>https://staging.example.test/solution-spa/privacy.html</loc>' "$tmp/sitemap.xml"
+          if grep -R -F 'https://manglefurniture.github.io/Solution-SPA' "$tmp"; then
+            echo 'GitHub Pages origin leaked into rendered deployment' >&2
+            exit 1
+          fi
+          SEO_MODE=hybrid SEO_EXPECT_INDEXABLE=1 SEO_REQUIRE_CANONICAL=1 node tests/seo-static.mjs "$tmp"
+
+      - name: Rollback APP_URL regression
+        run: bash tests/RollbackPublicOriginTest.sh
+
       - name: Build fresh schema
         env:
           MYSQL_PWD: root
@@ -55,9 +84,36 @@ jobs:
           php database/migrate.php
           php database/migrate.php
 
-      - name: Verify audit table
+      - name: Audit retention regression
+        env:
+          MYSQL_PWD: root
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_NAME: solution_spa
+          DB_USER: root
+          DB_PASSWORD: root
+          AUDIT_RETENTION_DAYS: 30
+        run: |
+          mariadb -h 127.0.0.1 -uroot solution_spa -e "INSERT INTO audit_events(actor_type,action,entity_type,created_at) VALUES('system','ci.old','test',CURRENT_TIMESTAMP - INTERVAL 45 DAY),('system','ci.new','test',CURRENT_TIMESTAMP);"
+          php database/prune_audit.php
+          old_count=$(mariadb -N -B -h 127.0.0.1 -uroot solution_spa -e "SELECT COUNT(*) FROM audit_events WHERE action='ci.old';")
+          new_count=$(mariadb -N -B -h 127.0.0.1 -uroot solution_spa -e "SELECT COUNT(*) FROM audit_events WHERE action='ci.new';")
+          test "$old_count" = "0"
+          test "$new_count" = "1"
+
+      - name: Payment integrity and audit regression
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_NAME: solution_spa
+          DB_USER: root
+          DB_PASSWORD: root
+        run: php tests/PaymentIntegrityDbTest.php
+
+      - name: Verify hardened schema
         env:
           MYSQL_PWD: root
         run: |
           mariadb -h 127.0.0.1 -uroot solution_spa -e "DESCRIBE audit_events;"
+          mariadb -h 127.0.0.1 -uroot solution_spa -e "SHOW INDEX FROM payments WHERE Key_name='uq_payments_paid_appointment';"
           mariadb -h 127.0.0.1 -uroot solution_spa -e "SELECT name FROM schema_migrations ORDER BY name;"

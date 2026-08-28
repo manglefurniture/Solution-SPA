@@ -12,6 +12,15 @@ function completedAppointmentForClient(PDO $pdo,int $appointmentId,int $clientId
   if((string)$a['status']!=='completed')respond(['error'=>'Solo se puede registrar un pago cuando la cita está marcada como realizada'],422);
   return $a;
 }
+function rejectDuplicatePaidAppointment(PDO $pdo,int $appointmentId,?int $excludePaymentId=null):void{
+  $sql="SELECT id FROM payments WHERE appointment_id=:appointment AND status='paid'";
+  $params=['appointment'=>$appointmentId];
+  if($excludePaymentId!==null){$sql.=' AND id<>:exclude';$params['exclude']=$excludePaymentId;}
+  $sql.=' LIMIT 1 FOR UPDATE';
+  $q=$pdo->prepare($sql);$q->execute($params);
+  if($q->fetchColumn())respond(['error'=>'Esta cita ya tiene un pago registrado'],409);
+}
+function paymentConstraintConflict(Throwable $e):bool{return $e instanceof PDOException&&(string)$e->getCode()==='23000';}
 if($method==='GET'){
   if(($user['role']??'')==='client'){
     if(!userCan($user,'payments.own.view'))respond(['error'=>'Sin permiso'],403);$cid=(int)($user['client_id']??0);if($cid<1)respond(['error'=>'Cuenta sin ficha'],403);
@@ -24,23 +33,29 @@ if($method==='POST'){
   try{
     $pdo->beginTransaction();
     completedAppointmentForClient($pdo,$appointment,$cid);
-    if($status==='paid'){$q=$pdo->prepare("SELECT id FROM payments WHERE appointment_id=:appointment AND status='paid' LIMIT 1 FOR UPDATE");$q->execute(['appointment'=>$appointment]);if($q->fetchColumn()){$pdo->rollBack();respond(['error'=>'Esta cita ya tiene un pago registrado'],409);}}
+    if($status==='paid')rejectDuplicatePaidAppointment($pdo,$appointment);
     $paidAt=$status==='paid'?trim((string)($d['paid_at']??date('Y-m-d H:i:s'))):null;
     $after=['client_id'=>$cid,'appointment_id'=>$appointment,'amount'=>(float)$amount,'method'=>$methodName,'status'=>$status,'reference'=>trim((string)($d['reference']??''))?:null,'notes'=>trim((string)($d['notes']??''))?:null,'paid_at'=>$paidAt];
     $q=$pdo->prepare('INSERT INTO payments(client_id,appointment_id,amount,method,status,reference,notes,paid_at) VALUES(:client_id,:appointment_id,:amount,:method,:status,:reference,:notes,:paid_at)');$q->execute($after);$id=(int)$pdo->lastInsertId();
-    auditMutation($pdo,$user,'payment.created','payment',$id,null,$after,['financial'=>true]);
+    auditMutationRequired($pdo,$user,'payment.created','payment',$id,null,$after,['financial'=>true]);
     $pdo->commit();respond(['id'=>$id],201);
-  }catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();respond(['error'=>'No se pudo registrar el pago'],500);}
+  }catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();if(paymentConstraintConflict($e))respond(['error'=>'Esta cita ya tiene un pago registrado'],409);respond(['error'=>'No se pudo registrar el pago'],500);}
 }
 if($method==='PATCH'){
   requirePermission('payments.update');$d=jsonInput();$id=payId($d['id']??null);if($id===false)respond(['error'=>'Pago inválido'],422);
   try{
     $pdo->beginTransaction();$q=$pdo->prepare('SELECT * FROM payments WHERE id=:id FOR UPDATE');$q->execute(['id'=>$id]);$cur=$q->fetch();if(!$cur){$pdo->rollBack();respond(['error'=>'El pago no existe'],404);}
-    $status=(string)($d['status']??$cur['status']);$methodName=(string)($d['method']??$cur['method']);if(!in_array($methodName,['cash','card','transfer','other'],true)||!in_array($status,['pending','paid','refunded','cancelled'],true)){$pdo->rollBack();respond(['error'=>'Método o estado inválido'],422);}$amount=$d['amount']??$cur['amount'];if(!is_numeric($amount)||(float)$amount<=0){$pdo->rollBack();respond(['error'=>'Importe inválido'],422);}$paidAt=$status==='paid'?($cur['paid_at']?:date('Y-m-d H:i:s')):null;
+    $status=(string)($d['status']??$cur['status']);$methodName=(string)($d['method']??$cur['method']);if(!in_array($methodName,['cash','card','transfer','other'],true)||!in_array($status,['pending','paid','refunded','cancelled'],true)){$pdo->rollBack();respond(['error'=>'Método o estado inválido'],422);}$amount=$d['amount']??$cur['amount'];if(!is_numeric($amount)||(float)$amount<=0){$pdo->rollBack();respond(['error'=>'Importe inválido'],422);}
+    if($status==='paid'){
+      $appointment=payId($cur['appointment_id']??null);if($appointment===false){$pdo->rollBack();respond(['error'=>'Un pago pagado debe pertenecer a una cita realizada'],422);}
+      completedAppointmentForClient($pdo,$appointment,(int)$cur['client_id']);
+      rejectDuplicatePaidAppointment($pdo,$appointment,$id);
+    }
+    $paidAt=$status==='paid'?($cur['paid_at']?:date('Y-m-d H:i:s')):null;
     $after=['amount'=>(float)$amount,'method'=>$methodName,'status'=>$status,'reference'=>trim((string)($d['reference']??$cur['reference']??''))?:null,'notes'=>trim((string)($d['notes']??$cur['notes']??''))?:null,'paid_at'=>$paidAt,'id'=>$id];
     $pdo->prepare('UPDATE payments SET amount=:amount,method=:method,status=:status,reference=:reference,notes=:notes,paid_at=:paid_at WHERE id=:id')->execute($after);
-    auditMutation($pdo,$user,'payment.updated','payment',$id,$cur,$after,['financial'=>true]);
+    auditMutationRequired($pdo,$user,'payment.updated','payment',$id,$cur,$after,['financial'=>true]);
     $pdo->commit();respond(['ok'=>true]);
-  }catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();respond(['error'=>'No se pudo actualizar el pago'],500);}
+  }catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();if(paymentConstraintConflict($e))respond(['error'=>'Esta cita ya tiene un pago registrado'],409);respond(['error'=>'No se pudo actualizar el pago'],500);}
 }
 respond(['error'=>'Método no permitido'],405);
