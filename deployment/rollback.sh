@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : "${APP_DIR:?APP_DIR is required}"
+: "${APP_URL:?APP_URL is required}"
 : "${BACKUP_DIR:?BACKUP_DIR is required}"
 
 cd "$APP_DIR"
@@ -14,6 +15,12 @@ fi
 
 git cat-file -e "${TARGET_COMMIT}^{commit}"
 git reset --hard "$TARGET_COMMIT"
+
+# A rollback restores versioned source files, including the GitHub Pages demo
+# origin. Re-render the public SEO origin for the environment we are actually
+# serving before tests/health checks can declare the rollback successful.
+APP_ROOT="$APP_DIR" php "$SCRIPT_DIR/render-public-origin.php"
+APP_ROOT="$APP_DIR" php "$SCRIPT_DIR/render-public-origin.php" --check
 
 if [[ -n "${RESTORE_DB_BACKUP:-}" ]]; then
   : "${DB_HOST:?DB_HOST is required for database restore}"
