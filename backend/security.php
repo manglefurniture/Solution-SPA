@@ -64,19 +64,22 @@ function rateLimitConsume(
     }
 
     $now ??= time();
-    if (!is_dir($directory) && !mkdir($directory, 0700, true) && !is_dir($directory)) {
+    if (!is_dir($directory) && !@mkdir($directory, 0700, true) && !is_dir($directory)) {
         throw new RateLimitStorageException('Cannot create rate-limit directory.');
+    }
+    if (!is_writable($directory)) {
+        throw new RateLimitStorageException('Rate-limit directory is not writable.');
     }
 
     $path = rtrim($directory, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . hash('sha256', $key) . '.json';
-    $fp = fopen($path, 'c+');
+    $fp = @fopen($path, 'c+');
     if ($fp === false) {
         throw new RateLimitStorageException('Cannot open rate-limit state.');
     }
 
     $locked = false;
     try {
-        if (!flock($fp, LOCK_EX)) {
+        if (!@flock($fp, LOCK_EX)) {
             throw new RateLimitStorageException('Cannot lock rate-limit state.');
         }
         $locked = true;
@@ -124,7 +127,7 @@ function rateLimitConsume(
         return ['allowed' => true, 'retry_after' => 0];
     } finally {
         if ($locked) {
-            flock($fp, LOCK_UN);
+            @flock($fp, LOCK_UN);
         }
         fclose($fp);
     }
