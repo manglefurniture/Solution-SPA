@@ -6,6 +6,20 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : "${APP_URL:?APP_URL is required}"
 : "${BACKUP_DIR:?BACKUP_DIR is required}"
 
+# The target commit may predate render-public-origin.php. Preserve the helper
+# outside the Git checkout before reset so legacy rollbacks can still restore
+# the environment-specific public origin.
+RENDER_HELPER_SOURCE="$SCRIPT_DIR/render-public-origin.php"
+[[ -f "$RENDER_HELPER_SOURCE" ]] || { echo "ROLLBACK_FAIL public origin renderer not found" >&2; exit 1; }
+PRESERVED_RENDER_HELPER="$(mktemp "${TMPDIR:-/tmp}/solution-spa-render-public-origin.XXXXXX.php")"
+cleanup() {
+  rm -f "$PRESERVED_RENDER_HELPER"
+}
+trap cleanup EXIT
+cp "$RENDER_HELPER_SOURCE" "$PRESERVED_RENDER_HELPER"
+chmod 600 "$PRESERVED_RENDER_HELPER"
+php -l "$PRESERVED_RENDER_HELPER" >/dev/null
+
 cd "$APP_DIR"
 TARGET_COMMIT="${TARGET_COMMIT:-}"
 if [[ -z "$TARGET_COMMIT" && -f "$BACKUP_DIR/last_predeploy_commit" ]]; then
@@ -17,10 +31,10 @@ git cat-file -e "${TARGET_COMMIT}^{commit}"
 git reset --hard "$TARGET_COMMIT"
 
 # A rollback restores versioned source files, including the GitHub Pages demo
-# origin. Re-render the public SEO origin for the environment we are actually
-# serving before tests/health checks can declare the rollback successful.
-APP_ROOT="$APP_DIR" php "$SCRIPT_DIR/render-public-origin.php"
-APP_ROOT="$APP_DIR" php "$SCRIPT_DIR/render-public-origin.php" --check
+# origin. Re-render with the preserved helper so this also works when the
+# target commit does not contain render-public-origin.php yet.
+APP_ROOT="$APP_DIR" php "$PRESERVED_RENDER_HELPER"
+APP_ROOT="$APP_DIR" php "$PRESERVED_RENDER_HELPER" --check
 
 if [[ -n "${RESTORE_DB_BACKUP:-}" ]]; then
   : "${DB_HOST:?DB_HOST is required for database restore}"
