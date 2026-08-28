@@ -4,7 +4,7 @@ Este flujo adapta el patrón de Hache-Base al SPA sin guardar secretos en GitHub
 
 ## Flujo
 
-`PRECHECK -> BACKUP -> FETCH/RESET -> RENDER APP_URL -> MIGRATIONS -> TESTS -> HEALTH -> DEPLOY_OK`
+`CONTROLLER -> PRECHECK -> BACKUP -> FETCH/RESET -> RENDER APP_URL -> MIGRATIONS -> TESTS -> HEALTH -> DEPLOY_OK`
 
 El runner no se activa automáticamente desde GitHub porque producción debe configurar primero el VPS, variables/secretos y una política de aprobación.
 
@@ -32,6 +32,14 @@ El render modifica únicamente `index.html`, `privacy.html`, `robots.txt` y `sit
 
 El preflight comprueba además que el almacenamiento de rate limiting sea escribible. En runtime, si ese almacenamiento deja de estar disponible, los endpoints protegidos fallan con 503 en lugar de continuar sin limitación.
 
+## Controlador estable
+
+`deployment/deploy.sh` delega en `deployment/release-controller.sh`. El controlador copia sus dependencias a un directorio temporal antes de cambiar el checkout, por lo que el flujo activo no desaparece durante `git reset --hard`.
+
+Cuando se ejecuta un rollback, el controlador moderno, el preflight, el backup y el renderer se preservan además en `BACKUP_DIR/deployment-tooling`. Al terminar el rollback se instala un bootstrap mínimo en `deployment/deploy.sh`. De esta forma, el siguiente comando normal de despliegue usa el tooling preservado aunque el commit restaurado contenga scripts de despliegue históricos.
+
+El controlador elimina/restaura ese bootstrap desde `HEAD` antes del preflight. Por tanto, un preflight antiguo estricto no bloquea el siguiente despliegue y el bootstrap no sobrevive al nuevo `git reset`.
+
 ## Desplegar
 
 Desde el servidor, con las variables ya cargadas:
@@ -54,7 +62,14 @@ Por defecto vuelve al commit guardado justo antes del último despliegue:
 bash deployment/rollback.sh
 ```
 
-También puede indicarse `TARGET_COMMIT`. Después del `git reset`, el rollback vuelve a renderizar el origen SEO desde `APP_URL` y lo valida antes de ejecutar tests y health-check; de ese modo no puede restaurar por accidente el canonical de GitHub Pages.
+También puede indicarse `TARGET_COMMIT`.
+
+El rollback clasifica el target antes del reset:
+
+- si el commit ya contiene el baseline SEO completo, vuelve a renderizar `APP_URL` usando el renderer preservado;
+- si el commit es realmente pre-SEO, restaura el código histórico sin inventar archivos SEO modernos.
+
+En ambos casos, el bootstrap de `deployment/deploy.sh` garantiza que el siguiente despliegue vuelva a utilizar el controlador moderno preservado. Así un rollback hacia un commit antiguo no puede obligar al siguiente deploy a usar un `deploy.sh`/`preflight.sh` obsoleto ni omitir el render SEO de la nueva revisión.
 
 Restaurar base de datos es deliberadamente explícito y solo ocurre si se proporciona `RESTORE_DB_BACKUP=/ruta/database.sql.gz`.
 
