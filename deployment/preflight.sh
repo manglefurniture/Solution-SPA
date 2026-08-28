@@ -16,6 +16,8 @@ done
 [[ -f "$APP_DIR/backend/api/health.php" ]] || { echo "PRECHECK_FAIL health endpoint missing" >&2; exit 1; }
 [[ -f "$APP_DIR/deployment/render-public-origin.php" ]] || { echo "PRECHECK_FAIL public-origin renderer missing" >&2; exit 1; }
 
+APP_ROOT="$APP_DIR" APP_URL="$APP_URL" php "$APP_DIR/deployment/render-public-origin.php" --validate-url >/dev/null
+
 cd "$APP_DIR"
 dirty="$(git status --porcelain)"
 if [[ -n "$dirty" ]]; then
@@ -33,15 +35,20 @@ if [[ -n "$dirty" ]]; then
     exit 1
   fi
 
+  deployed_url="$(APP_ROOT="$APP_DIR" php "$APP_DIR/deployment/render-public-origin.php" --detect)" || {
+    echo "PRECHECK_FAIL cannot identify previously rendered public origin" >&2
+    exit 1
+  }
+
   tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' EXIT
   for file in index.html privacy.html robots.txt sitemap.xml; do
     git show "HEAD:$file" > "$tmp/$file"
   done
-  APP_ROOT="$tmp" APP_URL="$APP_URL" php "$APP_DIR/deployment/render-public-origin.php" >/dev/null
+  APP_ROOT="$tmp" APP_URL="$deployed_url" php "$APP_DIR/deployment/render-public-origin.php" >/dev/null
   for file in index.html privacy.html robots.txt sitemap.xml; do
     if ! cmp -s "$APP_DIR/$file" "$tmp/$file"; then
-      echo "PRECHECK_FAIL ${file} differs from the deterministic APP_URL render" >&2
+      echo "PRECHECK_FAIL ${file} differs from the deterministic deployed-origin render" >&2
       exit 1
     fi
   done
