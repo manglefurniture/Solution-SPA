@@ -46,6 +46,25 @@ jobs:
           SEO_MODE=hybrid SEO_EXPECT_INDEXABLE=1 SEO_REQUIRE_CANONICAL=1 node tests/seo-static.mjs "$tmp"
           node tests/seo-hybrid-private.mjs
 
+      - name: APP_URL SEO render regression
+        env:
+          APP_URL: https://staging.example.test/solution-spa
+        run: |
+          tmp="$(mktemp -d)"
+          cp index.html privacy.html robots.txt sitemap.xml "$tmp/"
+          APP_ROOT="$tmp" php deployment/render-public-origin.php
+          APP_ROOT="$tmp" php deployment/render-public-origin.php --check
+          grep -F '<link rel="canonical" href="https://staging.example.test/solution-spa/" />' "$tmp/index.html"
+          grep -F '<meta property="og:url" content="https://staging.example.test/solution-spa/" />' "$tmp/index.html"
+          grep -F '<link rel="canonical" href="https://staging.example.test/solution-spa/privacy.html" />' "$tmp/privacy.html"
+          grep -F 'Sitemap: https://staging.example.test/solution-spa/sitemap.xml' "$tmp/robots.txt"
+          grep -F '<loc>https://staging.example.test/solution-spa/privacy.html</loc>' "$tmp/sitemap.xml"
+          if grep -R -F 'https://manglefurniture.github.io/Solution-SPA' "$tmp"; then
+            echo 'GitHub Pages origin leaked into rendered deployment' >&2
+            exit 1
+          fi
+          SEO_MODE=hybrid SEO_EXPECT_INDEXABLE=1 SEO_REQUIRE_CANONICAL=1 node tests/seo-static.mjs "$tmp"
+
       - name: Build fresh schema
         env:
           MYSQL_PWD: root
