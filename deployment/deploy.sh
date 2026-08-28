@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : "${APP_DIR:?APP_DIR is required}"
+: "${APP_URL:?APP_URL is required}"
 : "${BACKUP_DIR:?BACKUP_DIR is required}"
 
 DEPLOY_BRANCH="${DEPLOY_BRANCH:-main}"
@@ -22,6 +23,7 @@ git cat-file -e "${TARGET_COMMIT}^{commit}"
 git checkout "$DEPLOY_BRANCH"
 git reset --hard "$TARGET_COMMIT"
 
+APP_ROOT="$APP_DIR" APP_URL="$APP_URL" php "$SCRIPT_DIR/render-public-origin.php"
 php database/migrate.php
 bash tests/run.sh
 bash "$SCRIPT_DIR/health-check.sh"
