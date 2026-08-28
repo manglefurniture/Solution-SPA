@@ -56,6 +56,18 @@ if [[ -n "$dirty" ]]; then
   trap - EXIT
 fi
 
+RATE_LIMIT_DIR="${RATE_LIMIT_DIR:-$(php -r 'echo sys_get_temp_dir();')/solution-spa-rate-limits}"
+if ! mkdir -p "$RATE_LIMIT_DIR" || [[ ! -d "$RATE_LIMIT_DIR" || ! -w "$RATE_LIMIT_DIR" ]]; then
+  echo "PRECHECK_FAIL rate-limit directory is not writable: $RATE_LIMIT_DIR" >&2
+  exit 1
+fi
+probe="$RATE_LIMIT_DIR/.preflight-$$"
+if ! (umask 077 && : > "$probe"); then
+  echo "PRECHECK_FAIL cannot write rate-limit directory: $RATE_LIMIT_DIR" >&2
+  exit 1
+fi
+rm -f "$probe"
+
 MYSQL_PWD="${DB_PASSWORD:-}" mariadb -h "$DB_HOST" -P "${DB_PORT:-3306}" -u "$DB_USER" "$DB_NAME" -e 'SELECT 1;' >/dev/null
 
 echo "PRECHECK_OK"
