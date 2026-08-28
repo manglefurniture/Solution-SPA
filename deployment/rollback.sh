@@ -6,19 +6,28 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : "${APP_URL:?APP_URL is required}"
 : "${BACKUP_DIR:?BACKUP_DIR is required}"
 
-# The target commit may predate render-public-origin.php. Preserve the helper
-# outside the Git checkout before reset so legacy rollbacks can still restore
-# the environment-specific public origin.
+# A rollback target may predate both the public-origin renderer and the SEO
+# support files introduced with the current baseline. Preserve those deployment
+# helpers outside the Git checkout before reset so a legacy target can still be
+# served with the correct public origin without replacing its historical page.
 RENDER_HELPER_SOURCE="$SCRIPT_DIR/render-public-origin.php"
 [[ -f "$RENDER_HELPER_SOURCE" ]] || { echo "ROLLBACK_FAIL public origin renderer not found" >&2; exit 1; }
-PRESERVED_RENDER_HELPER="$(mktemp "${TMPDIR:-/tmp}/solution-spa-render-public-origin.XXXXXX.php")"
+
+PRESERVED_DIR="$(mktemp -d "${TMPDIR:-/tmp}/solution-spa-rollback-seo.XXXXXX")"
+PRESERVED_RENDER_HELPER="$PRESERVED_DIR/render-public-origin.php"
 cleanup() {
-  rm -f "$PRESERVED_RENDER_HELPER"
+  rm -rf "$PRESERVED_DIR"
 }
 trap cleanup EXIT
+
 cp "$RENDER_HELPER_SOURCE" "$PRESERVED_RENDER_HELPER"
 chmod 600 "$PRESERVED_RENDER_HELPER"
 php -l "$PRESERVED_RENDER_HELPER" >/dev/null
+
+for file in privacy.html robots.txt sitemap.xml; do
+  [[ -f "$APP_DIR/$file" ]] || { echo "ROLLBACK_FAIL current SEO asset missing: $file" >&2; exit 1; }
+  cp "$APP_DIR/$file" "$PRESERVED_DIR/$file"
+done
 
 cd "$APP_DIR"
 TARGET_COMMIT="${TARGET_COMMIT:-}"
@@ -30,9 +39,16 @@ fi
 git cat-file -e "${TARGET_COMMIT}^{commit}"
 git reset --hard "$TARGET_COMMIT"
 
-# A rollback restores versioned source files, including the GitHub Pages demo
-# origin. Re-render with the preserved helper so this also works when the
-# target commit does not contain render-public-origin.php yet.
+# Restore only auxiliary SEO files that the historical commit never had. If a
+# target already contains one, keep its own version. index.html is never copied
+# from the newer revision; the preserved renderer only injects canonical/og:url
+# when those tags are absent.
+for file in privacy.html robots.txt sitemap.xml; do
+  if [[ ! -f "$APP_DIR/$file" ]]; then
+    cp "$PRESERVED_DIR/$file" "$APP_DIR/$file"
+  fi
+done
+
 APP_ROOT="$APP_DIR" php "$PRESERVED_RENDER_HELPER"
 APP_ROOT="$APP_DIR" php "$PRESERVED_RENDER_HELPER" --check
 
