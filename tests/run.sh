@@ -13,5 +13,7 @@ done < <(find backend database tests -type f -name '*.php' -print0)
 echo "== Unit/regression checks =="
 php tests/PhoneNormalizerTest.php
 php tests/AuditSanitizerTest.php
+php tests/SecurityPolicyTest.php
+php tests/AppointmentRulesTest.php
 
 echo "TESTS_OK"
