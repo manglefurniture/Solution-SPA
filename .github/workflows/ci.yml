@@ -39,6 +39,13 @@ jobs:
           find deployment tests -type f -name '*.sh' -print0 \
             | xargs -0 -r -n1 bash -n
 
+      - name: Hache-Base hybrid SEO baseline
+        run: |
+          tmp="$(mktemp -d)"
+          cp index.html privacy.html robots.txt sitemap.xml "$tmp/"
+          SEO_MODE=hybrid SEO_EXPECT_INDEXABLE=1 SEO_REQUIRE_CANONICAL=1 node tests/seo-static.mjs "$tmp"
+          node tests/seo-hybrid-private.mjs
+
       - name: Build fresh schema
         env:
           MYSQL_PWD: root
@@ -55,9 +62,19 @@ jobs:
           php database/migrate.php
           php database/migrate.php
 
-      - name: Verify audit table
+      - name: Payment integrity regression
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_NAME: solution_spa
+          DB_USER: root
+          DB_PASSWORD: root
+        run: php tests/PaymentIntegrityDbTest.php
+
+      - name: Verify hardened schema
         env:
           MYSQL_PWD: root
         run: |
           mariadb -h 127.0.0.1 -uroot solution_spa -e "DESCRIBE audit_events;"
+          mariadb -h 127.0.0.1 -uroot solution_spa -e "SHOW INDEX FROM payments WHERE Key_name='uq_payments_paid_appointment';"
           mariadb -h 127.0.0.1 -uroot solution_spa -e "SELECT name FROM schema_migrations ORDER BY name;"
