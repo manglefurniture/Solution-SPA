@@ -40,9 +40,9 @@ PHP
 
 install_historical_deploy_tools() {
   local app="$1"
-  # These scripts deliberately fail. A successful forward deployment after a
-  # rollback therefore proves that deployment/deploy.sh used the preserved
-  # modern controller rather than the historical deploy/preflight tooling.
+  # These scripts deliberately fail. Successful deploys and repeated rollbacks
+  # after returning to historical commits therefore prove that the stable
+  # bootstraps used preserved modern controllers rather than historical tooling.
   cat > "$app/deployment/deploy.sh" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -55,7 +55,13 @@ set -euo pipefail
 echo 'HISTORICAL_PREFLIGHT_MUST_NOT_RUN' >&2
 exit 92
 SH
-  chmod +x "$app/deployment/deploy.sh" "$app/deployment/preflight.sh"
+  cat > "$app/deployment/rollback.sh" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+echo 'HISTORICAL_ROLLBACK_MUST_NOT_RUN' >&2
+exit 93
+SH
+  chmod +x "$app/deployment/deploy.sh" "$app/deployment/preflight.sh" "$app/deployment/rollback.sh"
 }
 
 build_fixture() {
@@ -82,19 +88,21 @@ build_fixture() {
   git commit -qm baseline-with-strict-historical-preflight
   BASELINE_TARGET="$(git rev-parse HEAD)"
 
-  # Current release owns the hardened deployment controller and rollback.
+  # Current release owns hardened deploy and rollback controllers.
   cp "$ROOT/deployment/deploy.sh" \
      "$ROOT/deployment/release-controller.sh" \
      "$ROOT/deployment/preflight.sh" \
      "$ROOT/deployment/backup.sh" \
      "$ROOT/deployment/render-public-origin.php" \
      "$ROOT/deployment/rollback.sh" \
+     "$ROOT/deployment/rollback-controller.sh" \
      "$seed/deployment/"
   chmod +x "$seed/deployment/deploy.sh" \
            "$seed/deployment/release-controller.sh" \
            "$seed/deployment/preflight.sh" \
            "$seed/deployment/backup.sh" \
-           "$seed/deployment/rollback.sh"
+           "$seed/deployment/rollback.sh" \
+           "$seed/deployment/rollback-controller.sh"
   git add deployment
   git commit -qm current-hardened-release-tooling
   CURRENT_TARGET="$(git rev-parse HEAD)"
@@ -105,6 +113,40 @@ build_fixture() {
   ORIGIN="$origin"
 }
 
+assert_bootstraps() {
+  local app="$1"
+  local backups="$2"
+
+  grep -q 'SOLUTION_SPA_DEPLOY_BOOTSTRAP' "$app/deployment/deploy.sh"
+  grep -q 'SOLUTION_SPA_ROLLBACK_BOOTSTRAP' "$app/deployment/rollback.sh"
+  test -f "$backups/deployment-tooling/release-controller.sh"
+  test -f "$backups/deployment-tooling/rollback-controller.sh"
+  test -f "$backups/deployment-tooling/preflight.sh"
+  test -f "$backups/deployment-tooling/backup.sh"
+  test -f "$backups/deployment-tooling/render-public-origin.php"
+}
+
+assert_rollback_state() {
+  local app="$1"
+  local target="$2"
+  local mode="$3"
+  local public_url="$4"
+
+  test "$(git -C "$app" rev-parse HEAD)" = "$target"
+  if [[ "$mode" == "legacy" ]]; then
+    test ! -e "$app/privacy.html"
+    test ! -e "$app/robots.txt"
+    test ! -e "$app/sitemap.xml"
+    ! grep -q '<link rel="canonical"' "$app/index.html"
+    ! grep -q '<meta property="og:url"' "$app/index.html"
+  else
+    grep -F "<link rel=\"canonical\" href=\"$public_url/\" />" "$app/index.html" >/dev/null
+    grep -F "<meta property=\"og:url\" content=\"$public_url/\" />" "$app/index.html" >/dev/null
+    grep -F "Sitemap: $public_url/sitemap.xml" "$app/robots.txt" >/dev/null
+    grep -F "<loc>$public_url/privacy.html</loc>" "$app/sitemap.xml" >/dev/null
+  fi
+}
+
 assert_forward_release() {
   local app="$1"
   local current="$2"
@@ -112,6 +154,8 @@ assert_forward_release() {
 
   test "$(git -C "$app" rev-parse HEAD)" = "$current"
   ! grep -q 'SOLUTION_SPA_DEPLOY_BOOTSTRAP' "$app/deployment/deploy.sh"
+  ! grep -q 'SOLUTION_SPA_ROLLBACK_BOOTSTRAP' "$app/deployment/rollback.sh"
+  test -f "$app/deployment/rollback-controller.sh"
   grep -F "<link rel=\"canonical\" href=\"$public_url/\" />" "$app/index.html" >/dev/null
   grep -F "<meta property=\"og:url\" content=\"$public_url/\" />" "$app/index.html" >/dev/null
   grep -F "Sitemap: $public_url/sitemap.xml" "$app/robots.txt" >/dev/null
@@ -141,28 +185,12 @@ run_case() {
   TARGET_COMMIT="$rollback_target" \
   bash "$app/deployment/rollback.sh" >/dev/null
 
-  test "$(git -C "$app" rev-parse HEAD)" = "$rollback_target"
-  grep -q 'SOLUTION_SPA_DEPLOY_BOOTSTRAP' "$app/deployment/deploy.sh"
-  test -f "$backups/deployment-tooling/release-controller.sh"
-  test -f "$backups/deployment-tooling/preflight.sh"
-  test -f "$backups/deployment-tooling/backup.sh"
-  test -f "$backups/deployment-tooling/render-public-origin.php"
+  assert_rollback_state "$app" "$rollback_target" "$rollback_mode" "$rollback_url"
+  assert_bootstraps "$app" "$backups"
 
-  if [[ "$rollback_mode" == "legacy" ]]; then
-    test ! -e "$app/privacy.html"
-    test ! -e "$app/robots.txt"
-    test ! -e "$app/sitemap.xml"
-    ! grep -q '<link rel="canonical"' "$app/index.html"
-    ! grep -q '<meta property="og:url"' "$app/index.html"
-  else
-    grep -F "<link rel=\"canonical\" href=\"$rollback_url/\" />" "$app/index.html" >/dev/null
-    grep -F "Sitemap: $rollback_url/sitemap.xml" "$app/robots.txt" >/dev/null
-  fi
-
-  # This is the exact documented command after rollback. The checkout currently
-  # contains deliberately broken historical deploy/preflight scripts in HEAD;
-  # the bootstrap must delegate to the preserved modern controller, which
-  # restores deployment/deploy.sh before preflight and then deploys current main.
+  # This is the exact documented command after rollback. Historical deploy and
+  # preflight scripts in the target deliberately fail, so success proves the
+  # preserved modern release controller is used.
   APP_DIR="$app" \
   APP_URL="$forward_url" \
   BACKUP_DIR="$backups" \
@@ -177,8 +205,57 @@ run_case() {
   assert_forward_release "$app" "$CURRENT_TARGET" "$forward_url"
 }
 
+run_repeated_rollback_case() {
+  local app="$TMP/repeated-app"
+  local backups="$TMP/repeated-backups"
+  local first_url="https://rollback.example.test/repeated-legacy"
+  local second_url="https://rollback.example.test/repeated-baseline"
+  local forward_url="https://forward.example.test/repeated"
+
+  git clone -q -b main "$ORIGIN" "$app"
+  mkdir -p "$backups"
+
+  # First rollback reaches the true legacy target and installs both stable
+  # bootstraps over the deliberately broken historical scripts.
+  APP_DIR="$app" \
+  APP_URL="$first_url" \
+  BACKUP_DIR="$backups" \
+  TARGET_COMMIT="$LEGACY_TARGET" \
+  bash "$app/deployment/rollback.sh" >/dev/null
+
+  assert_rollback_state "$app" "$LEGACY_TARGET" legacy "$first_url"
+  assert_bootstraps "$app" "$backups"
+
+  # Without a preserved rollback controller this exact documented command would
+  # execute HISTORICAL_ROLLBACK_MUST_NOT_RUN. Instead it must use the bootstrap,
+  # re-render the SEO baseline for the second target, and reinstall both
+  # bootstraps for any subsequent operation.
+  APP_DIR="$app" \
+  APP_URL="$second_url" \
+  BACKUP_DIR="$backups" \
+  TARGET_COMMIT="$BASELINE_TARGET" \
+  bash "$app/deployment/rollback.sh" >/dev/null
+
+  assert_rollback_state "$app" "$BASELINE_TARGET" baseline "$second_url"
+  assert_bootstraps "$app" "$backups"
+
+  APP_DIR="$app" \
+  APP_URL="$forward_url" \
+  BACKUP_DIR="$backups" \
+  DB_HOST=127.0.0.1 \
+  DB_PORT=3306 \
+  DB_NAME="$DB_NAME" \
+  DB_USER=root \
+  DB_PASSWORD=root \
+  RATE_LIMIT_DIR="$TMP/repeated-rate-limits" \
+  bash "$app/deployment/deploy.sh" >/dev/null
+
+  assert_forward_release "$app" "$CURRENT_TARGET" "$forward_url"
+}
+
 build_fixture
 run_case legacy "$LEGACY_TARGET" legacy
 run_case baseline "$BASELINE_TARGET" baseline
+run_repeated_rollback_case
 
 echo 'ROLLBACK_PUBLIC_ORIGIN_OK'
