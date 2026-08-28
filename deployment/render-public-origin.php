@@ -32,6 +32,17 @@ function normalizePublicUrl(string $url): string
     return $url;
 }
 
+function injectHeadTag(string $html, string $tag): string
+{
+    $count = 0;
+    $html = preg_replace('~</head>~i', "    {$tag}\n  </head>", $html, 1, $count);
+    if (!is_string($html) || $count !== 1) {
+        throw new RuntimeException('index.html does not contain a usable </head>');
+    }
+
+    return $html;
+}
+
 if ($detectOnly) {
     $index = file_get_contents($root . DIRECTORY_SEPARATOR . 'index.html');
     if ($index === false || !preg_match('~<link\s+rel="canonical"\s+href="([^"]+)"\s*/?>~i', $index, $match)) {
@@ -70,6 +81,24 @@ foreach ($files as $file) {
 
     if (!$checkOnly) {
         $content = str_replace($sourceOrigin, $appUrl, $content);
+
+        // Rollback targets from before the SEO baseline do not have canonical
+        // or og:url yet. Add only those metadata tags while preserving the
+        // historical page body, styles and application behavior.
+        if ($file === 'index.html') {
+            try {
+                if (!preg_match('~<link\s+rel="canonical"\b~i', $content)) {
+                    $content = injectHeadTag($content, '<link rel="canonical" href="' . $appUrl . '/" />');
+                }
+                if (!preg_match('~<meta\s+property="og:url"\b~i', $content)) {
+                    $content = injectHeadTag($content, '<meta property="og:url" content="' . $appUrl . '/" />');
+                }
+            } catch (RuntimeException $e) {
+                fwrite(STDERR, "PUBLIC_ORIGIN_FAIL {$e->getMessage()}\n");
+                exit(1);
+            }
+        }
+
         if (file_put_contents($path, $content) === false) {
             fwrite(STDERR, "PUBLIC_ORIGIN_FAIL cannot write {$file}\n");
             exit(1);
